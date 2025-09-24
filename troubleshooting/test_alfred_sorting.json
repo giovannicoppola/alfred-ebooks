@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "uid": "book-abc123",
+      "title": "Book One",
+      "subtitle": "This should be second",
+      "icon": {"path": "icon.png"},
+      "valid": true
+    },
+    {
+      "uid": "0-summary",
+      "title": "🔍 Summary Item",
+      "subtitle": "This should be FIRST",
+      "icon": {"path": "icon.png"}, 
+      "valid": false
+    },
+    {
+      "uid": "book-def456", 
+      "title": "Book Two",
+      "subtitle": "This should be third",
+      "icon": {"path": "icon.png"},
+      "valid": true
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+# Requirements for Alfred Kindle Troubleshooting Scripts
+# Install with: pip install -r requirements.txt
+
+# Core dependencies for EPUB processing
+ebooklib>=0.18
+beautifulsoup4>=4.11.0
+docopt>=0.6.2
+
+# Additional dependencies (standard library modules don't need installation)
+# The following are built-in Python modules and don't require installation:
+# - sqlite3 (built-in)
+# - re (built-in)
+# - json (built-in)
+# - binascii (built-in)
+# - base64 (built-in)
+# - sys (built-in)
+# - argparse (built-in)
+# - glob (built-in)
+# - os (built-in)
+# - time (built-in)
+# - uuid (built-in)
