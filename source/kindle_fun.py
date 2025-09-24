@@ -139,14 +139,167 @@ def get_kindleClassic (myFile, downloaded):
 
 def fetchImageCover(epub_path, ICON_PATH):
 	# a function to retrieve the cover image of the book from the ePUB file
-	if os.path.exists(f"{epub_path}/cover.jpeg"):
-		src_path = f"{epub_path}/cover.jpeg"
-		dest_path = ICON_PATH
-		shutil.copy2(src_path, dest_path)
-		log ("cover image copied")
-		return ICON_PATH
-	else:
-		log ("no cover image found")
+	import xml.etree.ElementTree as ET
+	
+	try:
+		# Check if it's a directory (Apple Books format) or a zip file
+		if os.path.isdir(epub_path):
+			# Handle as directory (Apple Books format)
+			container_path = os.path.join(epub_path, 'META-INF', 'container.xml')
+			if not os.path.exists(container_path):
+				log("Container.xml not found")
+				return "icons/ibooks.png"
+			
+			# Read container.xml to find the OPF file
+			with open(container_path, 'rb') as f:
+				container_xml = f.read()
+			
+			# Parse container.xml to find the OPF file
+			root = ET.fromstring(container_xml)
+			ns = {'ns': 'urn:oasis:names:tc:opendocument:xmlns:container'}
+			opf_path = root.find('.//ns:rootfile', ns).get('full-path')
+			
+			# Read the OPF file
+			opf_file_path = os.path.join(epub_path, opf_path)
+			if not os.path.exists(opf_file_path):
+				log("OPF file not found")
+				return "icons/ibooks.png"
+			
+			with open(opf_file_path, 'rb') as f:
+				opf_content = f.read()
+			
+			# Parse OPF to find manifest items
+			opf_root = ET.fromstring(opf_content)
+			ns_opf = {'opf': 'http://www.idpf.org/2007/opf'}
+			
+			# Look for cover-related items in manifest
+			manifest_items = opf_root.findall('.//opf:manifest/opf:item', ns_opf)
+			cover_items = []
+			
+			for item in manifest_items:
+				item_id = item.get('id', '')
+				href = item.get('href', '')
+				media_type = item.get('media-type', '')
+				
+				# Look for cover images (various naming conventions)
+				if ('cover' in item_id.lower() or 'cover' in href.lower()) and media_type.startswith('image/'):
+					cover_items.append((item_id, href, media_type))
+			
+			# If no cover items found, look for any image files
+			if not cover_items:
+				for item in manifest_items:
+					item_id = item.get('id', '')
+					href = item.get('href', '')
+					media_type = item.get('media-type', '')
+					
+					if media_type.startswith('image/'):
+						cover_items.append((item_id, href, media_type))
+			
+			# Try to extract the cover image
+			if cover_items:
+				# Use the first cover item
+				_, href, _ = cover_items[0]
+				
+				# Resolve relative path
+				opf_dir = os.path.dirname(opf_path)
+				if opf_dir:
+					cover_path = os.path.join(epub_path, opf_dir, href)
+				else:
+					cover_path = os.path.join(epub_path, href)
+				
+				if os.path.exists(cover_path):
+					shutil.copy2(cover_path, ICON_PATH)
+					log(f"cover image copied from {cover_path}")
+					return ICON_PATH
+				else:
+					log(f"cover image not found at {cover_path}")
+			
+			# Fallback: check for common cover file names directly in EPUB root
+			common_cover_names = ['cover.jpeg', 'cover.jpg', 'cover.png', 'cover.gif']
+			for cover_name in common_cover_names:
+				cover_path = os.path.join(epub_path, cover_name)
+				if os.path.exists(cover_path):
+					shutil.copy2(cover_path, ICON_PATH)
+					log(f"cover image copied from {cover_path}")
+					return ICON_PATH
+			
+			log("no cover image found")
+			return "icons/ibooks.png"
+			
+		else:
+			# Handle as zip file (traditional EPUB format)
+			import zipfile
+			with zipfile.ZipFile(epub_path, 'r') as epub:
+				# Read container.xml to find the OPF file
+				container_xml = epub.read('META-INF/container.xml')
+				
+				# Parse container.xml to find the OPF file
+				root = ET.fromstring(container_xml)
+				ns = {'ns': 'urn:oasis:names:tc:opendocument:xmlns:container'}
+				opf_path = root.find('.//ns:rootfile', ns).get('full-path')
+				
+				# Read the OPF file
+				opf_content = epub.read(opf_path)
+				
+				# Parse OPF to find manifest items
+				opf_root = ET.fromstring(opf_content)
+				ns_opf = {'opf': 'http://www.idpf.org/2007/opf'}
+				
+				# Look for cover-related items in manifest
+				manifest_items = opf_root.findall('.//opf:manifest/opf:item', ns_opf)
+				cover_items = []
+				
+				for item in manifest_items:
+					item_id = item.get('id', '')
+					href = item.get('href', '')
+					media_type = item.get('media-type', '')
+					
+					# Look for cover images (various naming conventions)
+					if ('cover' in item_id.lower() or 'cover' in href.lower()) and media_type.startswith('image/'):
+						cover_items.append((item_id, href, media_type))
+				
+				# If no cover items found, look for any image files
+				if not cover_items:
+					for item in manifest_items:
+						item_id = item.get('id', '')
+						href = item.get('href', '')
+						media_type = item.get('media-type', '')
+						
+						if media_type.startswith('image/'):
+							cover_items.append((item_id, href, media_type))
+				
+				# Try to extract the cover image
+				if cover_items:
+					# Use the first cover item
+					_, href, _ = cover_items[0]
+					
+					# Resolve relative path
+					opf_dir = os.path.dirname(opf_path)
+					if opf_dir:
+						cover_path = os.path.join(opf_dir, href)
+					else:
+						cover_path = href
+					
+					if cover_path in epub.namelist():
+						with open(ICON_PATH, 'wb') as f:
+							f.write(epub.read(cover_path))
+						log(f"cover image extracted from {cover_path}")
+						return ICON_PATH
+				
+				# Fallback: check for common cover file names
+				common_cover_names = ['cover.jpeg', 'cover.jpg', 'cover.png', 'cover.gif']
+				for cover_name in common_cover_names:
+					if cover_name in epub.namelist():
+						with open(ICON_PATH, 'wb') as f:
+							f.write(epub.read(cover_name))
+						log(f"cover image extracted from {cover_name}")
+						return ICON_PATH
+				
+				log("no cover image found")
+				return "icons/ibooks.png"
+				
+	except Exception as e:
+		log(f"Error extracting cover image: {e}")
 		return "icons/ibooks.png"
 
 	
