@@ -391,7 +391,7 @@ export PYTHONPATH="$PWD/lib"
 				<key>script</key>
 				<string>query=$1
 export PYTHONPATH="$PWD/lib"
-/usr/bin/python3 ../troubleshooting/searchEPUB.py "$1" --book="$curr_book" --alfred
+/usr/bin/python3 searchEPUB.py "$1" --book="$curr_book" --alfred
 </string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
