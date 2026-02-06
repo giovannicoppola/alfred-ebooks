@@ -1,3 +1,6 @@
 requests==2.27.1
 xmltodict==0.13.0
 biplist==1.0.3
+docopt==0.6.2
+ebooklib==0.19
+beautifulsoup4==4.13.5

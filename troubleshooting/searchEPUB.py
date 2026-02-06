@@ -118,6 +118,7 @@ from ebooklib import epub
 
 # Default settings
 DEFAULT_EPUB_FOLDER = "~/Library/Containers/com.apple.BKAgentService/Data/Documents/iBooks/Books"
+DEFAULT_EPUB_FOLDER = "~/Library/Mobile Documents/iCloud~com~apple~iBooks/Documents/"
 DEFAULT_CONTEXT_WORDS = 10
 
 
@@ -1066,12 +1067,12 @@ def search_with_alfred_progress(folder_path, search_text, context_words=10, crea
     This function uses a temp file to track progress and outputs only ONE JSON 
     response per execution, relying on Alfred's rerun to call again.
     """
-    import sys
-    import os
-    import json
-    import tempfile
     import hashlib
-    
+    import json
+    import os
+    import sys
+    import tempfile
+
     # Create unique state file based on search parameters
     state_key = f"{folder_path}_{search_text}_{context_words}"
     state_hash = hashlib.md5(state_key.encode()).hexdigest()[:8]

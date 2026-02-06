@@ -74,6 +74,8 @@
 				<false/>
 			</dict>
 		</array>
+		<key>C201E860-5900-49B2-8980-4B8E5DA0A4C8</key>
+		<array/>
 		<key>C9F9AE76-99B2-4432-91CD-AF8D39A92E25</key>
 		<array>
 			<dict>
@@ -160,21 +162,50 @@
 				<key>concurrently</key>
 				<false/>
 				<key>escaping</key>
-				<integer>102</integer>
+				<integer>68</integer>
 				<key>script</key>
-				<string>query=$1
-open "$1"</string>
+				<string>on run argv
+
+tell application "System Events"
+	tell process "Books"
+		-- Give Books a moment to settle its window state
+		delay 0.5
+
+		repeat with w in windows
+			try
+				set wName to name of w as text
+				set roleDesc to role description of w
+
+				-- Only close the main library window
+				if wName is "All" or roleDesc is "main window" then
+					if (exists button 1 of w) then
+						click button 1 of w
+						do shell script "echo Closed library window (" &amp; quoted form of wName &amp; ") 1&gt;&amp;2"
+					end if
+				else
+					do shell script "echo Skipped window: " &amp; quoted form of wName &amp; " [" &amp; roleDesc &amp; "] 1&gt;&amp;2"
+				end if
+
+			on error errMsg
+				do shell script "echo Error: " &amp; quoted form of errMsg &amp; " 1&gt;&amp;2"
+			end try
+		end repeat
+	end tell
+end tell
+
+
+end run</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
 				<string></string>
 				<key>type</key>
-				<integer>5</integer>
+				<integer>6</integer>
 			</dict>
 			<key>type</key>
 			<string>alfred.workflow.action.script</string>
 			<key>uid</key>
-			<string>C201E860-5900-49B2-8980-4B8E5DA0A4C8</string>
+			<string>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</string>
 			<key>version</key>
 			<integer>2</integer>
 		</dict>
@@ -229,6 +260,30 @@ export PYTHONPATH="$PWD/lib"
 			<string>EFFEB21A-8303-4FE0-8B9D-0302BE4E21EA</string>
 			<key>version</key>
 			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>concurrently</key>
+				<false/>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>script</key>
+				<string>query=$1
+open "$1"</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>type</key>
+				<integer>5</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.script</string>
+			<key>uid</key>
+			<string>C201E860-5900-49B2-8980-4B8E5DA0A4C8</string>
+			<key>version</key>
+			<integer>2</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -575,6 +630,15 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<real>1570</real>
 			<key>ypos</key>
 			<real>460</real>
+		</dict>
+		<key>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</key>
+		<dict>
+			<key>note</key>
+			<string>script to close the 'All' window after opening the book, but it works inconsistently</string>
+			<key>xpos</key>
+			<real>975</real>
+			<key>ypos</key>
+			<real>110</real>
 		</dict>
 		<key>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</key>
 		<dict>
