@@ -3,3 +3,5 @@
 __pycache__
 prefs.plist
 lib
+venv/
+venv.nosync/
