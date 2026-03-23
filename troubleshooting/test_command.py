@@ -7,7 +7,7 @@ import sys
 import os
 
 # Change to the correct directory 
-os.chdir('/Users/giovanni.coppola/Library/CloudStorage/OneDrive-RegeneronPharmaceuticals,Inc/MyScripts/myGitHubRepos/alfred-kindle/troubleshooting')
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 print("Testing searchEPUB.py with mock arguments...")
 

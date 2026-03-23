@@ -5,7 +5,7 @@ import sys
 import os
 
 # Add the current directory to Python path for imports
-sys.path.insert(0, '/Users/giovanni.coppola/Library/CloudStorage/OneDrive-RegeneronPharmaceuticals,Inc/MyScripts/myGitHubRepos/alfred-kindle/troubleshooting')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Test the proximity search functions directly
 def test_proximity_functions():

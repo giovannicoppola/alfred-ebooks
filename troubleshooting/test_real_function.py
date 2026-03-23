@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 import sys
-sys.path.insert(0, '/Users/giovanni.coppola/Library/CloudStorage/OneDrive-RegeneronPharmaceuticals,Inc/MyScripts/myGitHubRepos/alfred-kindle/troubleshooting')
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from searchEPUB import export_alfred_books_overview
 import json
