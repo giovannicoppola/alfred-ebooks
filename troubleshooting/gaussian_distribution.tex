@@ -1,0 +1,95 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+
+\geometry{margin=1in}
+
+\title{Gaussian Distribution Formula}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Gaussian (Normal) Distribution}
+
+The probability density function of a Gaussian (normal) distribution is given by:
+
+\begin{equation}
+f(x) = \frac{1}{\sigma\sqrt{2\pi}} \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $x$ is the random variable
+    \item $\mu$ is the mean of the distribution
+    \item $\sigma$ is the standard deviation ($\sigma > 0$)
+    \item $\sigma^2$ is the variance
+\end{itemize}
+
+\section{Standard Normal Distribution}
+
+When $\mu = 0$ and $\sigma = 1$, we get the standard normal distribution:
+
+\begin{equation}
+\phi(z) = \frac{1}{\sqrt{2\pi}} \exp\left(-\frac{z^2}{2}\right)
+\end{equation}
+
+\section{Alternative Parameterization}
+
+The Gaussian distribution can also be expressed using precision $\tau = \frac{1}{\sigma^2}$:
+
+\begin{equation}
+f(x) = \sqrt{\frac{\tau}{2\pi}} \exp\left(-\frac{\tau(x-\mu)^2}{2}\right)
+\end{equation}
+
+\section{Hierarchical Linear Regression Model}
+
+Based on the Stan code provided, this model fits a hierarchical linear regression with individual-specific parameters. The statistical model is:
+
+\subsection{Likelihood}
+For individual $k = 1, \ldots, K$ and observations $i$ within individual $k$:
+
+\begin{equation}
+y_{i,k} \sim \mathcal{N}(\mu_{i,k}, \sigma^2)
+\end{equation}
+
+where the mean is structured as:
+
+\begin{equation}
+\mu_{i,k} = \beta_{\text{edu}} \cdot \text{edu}_k + \beta_{\text{sex}} \cdot \text{sex}_k + \beta_{\text{cag}} \cdot \text{cag}_k + \beta_k \cdot (\text{age}_{i,k} - \alpha_k)
+\end{equation}
+
+\subsection{Individual-specific Parameters}
+Each individual $k$ has their own intercept and slope parameters:
+
+\begin{align}
+\alpha_k &= \exp(\alpha_{\text{raw},k}) \quad \text{(individual-specific age offset)} \\
+\beta_k &= \exp(\beta_{\text{raw},k}) \quad \text{(individual-specific age slope)}
+\end{align}
+
+\subsection{Prior Distributions}
+
+\begin{align}
+\alpha_{\text{raw},k} &\sim \mathcal{N}(4, 0.7^2) \\
+\beta_{\text{raw},k} &\sim \mathcal{N}(-4, 0.3^2) \\
+\sigma &\sim \text{Gamma}(2, 1) \\
+\beta_{\text{edu}} &\sim \mathcal{N}(0, 10^2) \\
+\beta_{\text{sex}} &\sim \mathcal{N}(0, 10^2) \\
+\beta_{\text{cag}} &\sim \mathcal{N}(0, 10^2)
+\end{align}
+
+\subsection{Model Interpretation}
+
+This is a \textbf{hierarchical nonlinear growth curve model} where:
+\begin{itemize}
+    \item Each individual has their own growth parameters ($\alpha_k$, $\beta_k$)
+    \item The response variable depends on age in a shifted manner: $(\text{age} - \alpha_k)$
+    \item Individual characteristics (education, sex, CAG repeat length) affect the baseline level
+    \item The log-normal parameterization ensures $\alpha_k, \beta_k > 0$
+    \item This could model disease progression or cognitive decline over age
+\end{itemize}
+
+\end{document}

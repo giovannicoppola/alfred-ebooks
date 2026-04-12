@@ -1,0 +1,121 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{enumitem}
+
+\geometry{margin=1in}
+
+\title{Hierarchical Linear Regression Model}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Model Overview}
+
+This document describes a hierarchical linear regression model with individual-specific parameters, designed to model longitudinal data with age-dependent responses and individual covariates.
+
+\section{Data Structure}
+
+\begin{itemize}
+    \item $N$: Total number of observations
+    \item $K$: Number of individuals
+    \item $y_{i,k}$: Response variable for observation $i$ of individual $k$
+    \item $\text{age}_{i,k}$: Age at observation $i$ for individual $k$
+    \item $\text{edu}_k$: Education level for individual $k$
+    \item $\text{sex}_k$: Sex indicator for individual $k$
+    \item $\text{cag}_k$: CAG repeat length for individual $k$
+    \item $s_k$: Number of observations for individual $k$
+\end{itemize}
+
+\section{Statistical Model}
+
+\subsection{Likelihood}
+
+For individual $k = 1, \ldots, K$ and observations $i$ within individual $k$:
+
+\begin{equation}
+y_{i,k} \sim \mathcal{N}(\mu_{i,k}, \sigma^2)
+\end{equation}
+
+where the mean is structured as:
+
+\begin{equation}
+\mu_{i,k} = \beta_{\text{edu}} \cdot \text{edu}_k + \beta_{\text{sex}} \cdot \text{sex}_k + \beta_{\text{cag}} \cdot \text{cag}_k + \beta_k \cdot (\text{age}_{i,k} - \alpha_k)
+\end{equation}
+
+\subsection{Individual-specific Parameters}
+
+Each individual $k$ has their own intercept and slope parameters:
+
+\begin{align}
+\alpha_k &= \exp(\alpha_{\text{raw},k}) \quad \text{(individual-specific age offset)} \\
+\beta_k &= \exp(\beta_{\text{raw},k}) \quad \text{(individual-specific age slope)}
+\end{align}
+
+The exponential transformation ensures that $\alpha_k, \beta_k > 0$.
+
+\subsection{Prior Distributions}
+
+\subsubsection{Individual-specific Parameters}
+\begin{align}
+\alpha_{\text{raw},k} &\sim \mathcal{N}(4, 0.7^2) \\
+\beta_{\text{raw},k} &\sim \mathcal{N}(-4, 0.3^2)
+\end{align}
+
+\subsubsection{Population-level Parameters}
+\begin{align}
+\sigma &\sim \text{Gamma}(2, 1) \\
+\beta_{\text{edu}} &\sim \mathcal{N}(0, 10^2) \\
+\beta_{\text{sex}} &\sim \mathcal{N}(0, 10^2) \\
+\beta_{\text{cag}} &\sim \mathcal{N}(0, 10^2)
+\end{align}
+
+\section{Model Interpretation}
+
+\subsection{Model Type}
+This is a \textbf{hierarchical nonlinear growth curve model} with the following characteristics:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Hierarchical structure}: Each individual has their own growth parameters
+    \item \textbf{Nonlinear age effect}: The age relationship is shifted by individual-specific $\alpha_k$
+    \item \textbf{Individual covariates}: Education, sex, and CAG repeat length affect baseline levels
+    \item \textbf{Positive constraints}: Log-normal parameterization ensures $\alpha_k, \beta_k > 0$
+\end{itemize}
+
+\subsection{Parameter Interpretation}
+
+\begin{itemize}[leftmargin=*]
+    \item $\alpha_k$: Individual-specific age offset or inflection point (when effects begin)
+    \item $\beta_k$: Individual-specific rate of change with respect to age
+    \item $\beta_{\text{edu}}$: Effect of education on baseline response
+    \item $\beta_{\text{sex}}$: Effect of sex on baseline response  
+    \item $\beta_{\text{cag}}$: Effect of CAG repeat length on baseline response
+    \item $\sigma$: Residual standard deviation
+\end{itemize}
+
+\subsection{Potential Applications}
+
+Given the variables present (age, education, sex, CAG repeats), this model is likely designed for:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Disease progression modeling}: Particularly neurodegenerative diseases
+    \item \textbf{Huntington's disease research}: CAG repeats are strongly associated with Huntington's
+    \item \textbf{Cognitive decline studies}: Individual trajectories of cognitive function over age
+    \item \textbf{Biomarker progression}: Tracking disease biomarkers over time
+\end{itemize}
+
+\section{Model Advantages}
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Individual heterogeneity}: Accounts for individual differences in disease onset and progression
+    \item \textbf{Covariate adjustment}: Controls for demographic and genetic factors
+    \item \textbf{Flexible age relationships}: Allows for individual-specific age trajectories
+    \item \textbf{Bayesian framework}: Incorporates prior knowledge and quantifies uncertainty
+    \item \textbf{Hierarchical pooling}: Borrows strength across individuals for better parameter estimation
+\end{enumerate}
+
+\end{document}
