@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>bundleid</key>
-	<string>giovanni.alfred-kindle</string>
+	<string>giovanni.alfred-ebooks</string>
 	<key>category</key>
 	<string>myWorkflows</string>
 	<key>connections</key>
@@ -297,11 +297,11 @@ open "$1"</string>
 				<key>focusedappvariablename</key>
 				<string></string>
 				<key>hotkey</key>
-				<integer>0</integer>
+				<integer>40</integer>
 				<key>hotmod</key>
-				<integer>0</integer>
+				<integer>524288</integer>
 				<key>hotstring</key>
-				<string></string>
+				<string>K</string>
 				<key>leftcursor</key>
 				<false/>
 				<key>modsmode</key>
@@ -535,7 +535,7 @@ export PYTHONPATH="$PWD/lib"
 	</array>
 	<key>readme</key>
 	<string># alfred-eBooks 📚
-List and open your Kindle and Apple Books ebooks with Alfred
+List, open, and search your eBooks ebooks with Alfred
 
 
 ## Motivation ✅
@@ -547,12 +547,12 @@ List and open your Kindle and Apple Books ebooks with Alfred
 
 - Alfred 5 with Powerpack license
 - Python3
-- Kindle app installed
+
 
 
 
 ### Default settings 
-- In Alfred, open the 'Configure Workflow' menu in `alfred-eBooks` preferences
+- In Alfred, open the 'Configure Workflow' menu in `eBooks` preferences
 	- set the keyword for the workflow (default: `!k`)
 	- set the keyword to force an update (default: `::books-refresh`)
 	- set the book content icon, i.e. if a book has been downloaded locally (default: 📘)
@@ -564,7 +564,6 @@ List and open your Kindle and Apple Books ebooks with Alfred
 		- `Author`: search authors only
 		- `Both`: search across titles and authors
 
-Note: `alfred-eBooks` will search for Kindle Classic and the (new) Kindle app. If both are installed, the latter with be used.
 
 ## Basic Usage 📖
 
@@ -856,11 +855,9 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<string>refreshkeyword</string>
 		</dict>
 	</array>
-	<key>variablesdontexport</key>
-	<array/>
 	<key>version</key>
 	<string>0.2</string>
 	<key>webaddress</key>
-	<string>https://github.com/giovannicoppola/alfred-kindle</string>
+	<string>https://github.com/giovannicoppola/alfred-ebooks</string>
 </dict>
 </plist>
