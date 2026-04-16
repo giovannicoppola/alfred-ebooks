@@ -4,14 +4,34 @@
 
 import os
 import json
-from config import  log, KINDLE_APP, XML_CACHE,KINDLE_PATH, BOOK_CONTENT_SYMBOL,GHOST_RESULTS, SEARCH_SCOPE, IBOOKS_PATH, GHOST_SYMBOL, TIMESTAMP_KINDLE, TIMESTAMP_IBOOKS, KINDLE_PICKLE, IBOOKS_PICKLE, TARGET_LIBRARY
+from config import (
+	log,
+	KINDLE_APP,
+	XML_CACHE,
+	KINDLE_PATH,
+	BOOK_CONTENT_SYMBOL,
+	GHOST_RESULTS,
+	SEARCH_SCOPE,
+	IBOOKS_PATH,
+	GHOST_SYMBOL,
+	TIMESTAMP_KINDLE,
+	TIMESTAMP_IBOOKS,
+	KINDLE_PICKLE,
+	IBOOKS_PICKLE,
+	YOMU_DATA_DB,
+	TIMESTAMP_YOMU,
+	YOMU_PICKLE,
+	USE_KINDLE,
+	USE_IBOOKS,
+	USE_YOMU,
+)
 from time import time
 
 
 import sys
 import json
 import pickle
-from kindle_fun import get_kindle, get_ibooks, checkTimeStamp, getDownloadedASINs, get_kindleClassic
+from kindle_fun import get_kindle, get_ibooks, get_yomu, checkTimeStamp, getDownloadedASINs, get_kindleClassic
 
 
 MYINPUT = sys.argv[1].casefold()
@@ -68,6 +88,22 @@ def search_books(books, search_string):
 		elif SEARCH_SCOPE == "Both":
 			if all(fragment.lower() in book.title.lower() or fragment.lower() in book.author.lower() for fragment in search_fragments):
 				results.append(book)
+		elif SEARCH_SCOPE == "Yomu":
+			# Yomu "tags" live in Book.book_desc for books coming from the Yomu adapter.
+			def fragment_matches(book_obj, fragment):
+				frag = fragment.lower()
+				if frag in (book_obj.title or "").lower():
+					return True
+				if frag in (book_obj.author or "").lower():
+					return True
+				if book_obj.source == "Yomu":
+					tags = (book_obj.book_desc or "").strip()
+					if tags and not tags.startswith("No book description for this title available in Books"):
+						return frag in tags.lower()
+				return False
+
+			if all(fragment_matches(book, fragment) for fragment in search_fragments):
+				results.append(book)
 
 	return results
 
@@ -95,12 +131,24 @@ def serveBooks(books, result):
 			readPct = myBook.read_pct
 		else:
 			readPct = ""
-		
-		
-		
+
+		tagsPart = ""
+		if myBook.source == "Yomu":
+			# Hide the Book default placeholder text when there are no tags.
+			tagsRaw = (myBook.book_desc or "").strip()
+			if tagsRaw and not tagsRaw.startswith("No book description for this title available in Books"):
+				tagsPart = f"🏷️ {tagsRaw}"
+				# Alfred subtitles get cramped quickly with long tag lists.
+				if len(tagsPart) > 90:
+					tagsPart = tagsPart[:87] + "..."
 		result["items"].append({
 			"title": f"{myBook.title} {loanedString} {downloadedString}",
-			'subtitle': f"{myCounter}/{booksN:,} – {myBook.author} {readPct}",
+			'subtitle': (
+				f"{myCounter}/{booksN:,} – {myBook.author}"
+				+ (f" {readPct}" if readPct else "")
+				+ (f" {tagsPart}" if tagsPart else "")
+				+ f" (📚 {myBook.source})"
+			).rstrip(),
 			'valid': True,
 			"icon": {
 				"path": myBook.icon_path
@@ -136,7 +184,7 @@ def main():
 	main_start_time = time()
 	
 	myBooks = []
-	if TARGET_LIBRARY in ["Kindle", "Both"]:
+	if USE_KINDLE:
 		if KINDLE_APP == "classic":
 
 			myContentBooks = getDownloadedASINs(KINDLE_PATH) # output is a list of downloaded book ASINs
@@ -167,7 +215,7 @@ def main():
 			
 
 
-	if TARGET_LIBRARY in ["iBooks", "Both"]:
+	if USE_IBOOKS:
 		if not os.path.exists(IBOOKS_PICKLE):
 				log ("building new iBooks database")
 				get_ibooks(IBOOKS_PATH)
@@ -182,6 +230,21 @@ def main():
 		
 		with open(IBOOKS_PICKLE, 'rb') as file:
 			myBooks = myBooks + pickle.load(file)
+
+	if USE_YOMU:
+		# For Yomu we use a local CoreData SQLite file as the authoritative source.
+		# Rebuild the cache if the DB mtime changes.
+		if not os.path.exists(YOMU_PICKLE):
+			log("building new Yomu database")
+			get_yomu(YOMU_DATA_DB)
+
+		elif os.path.exists(YOMU_DATA_DB) and checkTimeStamp(YOMU_DATA_DB, TIMESTAMP_YOMU):
+			log("outdated, building new Yomu database")
+			get_yomu(YOMU_DATA_DB)
+
+		if os.path.exists(YOMU_PICKLE):
+			with open(YOMU_PICKLE, 'rb') as file:
+				myBooks = myBooks + pickle.load(file)
 
 			
 	

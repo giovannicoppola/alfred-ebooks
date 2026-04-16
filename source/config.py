@@ -12,6 +12,7 @@ CACHE_FOLDER_IMAGES_KINDLE = CACHE_FOLDER+"/images/kindle/"
 CACHE_FOLDER_IMAGES_IBOOKS = CACHE_FOLDER+"/images/ibooks/"
 TIMESTAMP_KINDLE = CACHE_FOLDER+"/timestamp_kindle.txt"
 TIMESTAMP_IBOOKS = CACHE_FOLDER+"/timestamp_ibooks.txt"
+TIMESTAMP_YOMU = CACHE_FOLDER+"/timestamp_yomu.txt"
 
 
 
@@ -55,6 +56,22 @@ if not os.path.exists(DATA_FOLDER):
 
 KINDLE_PICKLE = f"{DATA_FOLDER}/kindle_books.pkl"
 IBOOKS_PICKLE = f"{DATA_FOLDER}/ibooks_books.pkl"
+YOMU_PICKLE = f"{DATA_FOLDER}/yomu_books.pkl"
+
+# Yomu defaults (can be overridden via environment variables in Alfred)
+YOMU_CONTAINER_ID = os.getenv('YOMU_CONTAINER_ID', 'net.cecinestpasparis.yomu')
+YOMU_DATA_DB = os.path.expanduser(
+    os.getenv(
+        'YOMU_DATA_DB',
+        f"~/Library/Containers/{YOMU_CONTAINER_ID}/Data/Documents/Yomu/Yomu_data.sqlite",
+    )
+)
+YOMU_EPUB_CACHE_DIR = os.path.expanduser(
+    os.getenv(
+        'YOMU_EPUB_CACHE_DIR',
+        f"~/Library/Containers/{YOMU_CONTAINER_ID}/Data/Library/Caches/EBook/EPub",
+    )
+)
 
 def log(s, *args):
     if args:
@@ -163,14 +180,21 @@ BOOK_CONTENT_SYMBOL = os.path.expanduser(os.getenv('BookContent'))
 GHOST_SYMBOL = os.path.expanduser(os.getenv('GhostContent'))
 GHOST_RESULTS = os.path.expanduser(os.getenv('SHOW_GHOST'))
 SEARCH_SCOPE = os.path.expanduser(os.getenv('SEARCH_SCOPE'))
-TARGET_LIBRARY = os.path.expanduser(os.getenv('TARGET_LIBRARY'))
 
 
-if TARGET_LIBRARY in ["Kindle", "Both"]:
+def env_flag(name, default='1'):
+    return os.getenv(name, default) not in ['0', 'false', 'False', '']
+
+
+USE_KINDLE = env_flag('USE_KINDLE', '1')
+USE_IBOOKS = env_flag('USE_IBOOKS', '1')
+USE_YOMU = env_flag('USE_YOMU', '1')
+
+
+if USE_KINDLE:
     XML_CACHE, KINDLE_PATH, KINDLE_APP = defineKindleFolder()
 else:
     XML_CACHE, KINDLE_PATH, KINDLE_APP = '', '', ''
 
 
-
-IBOOKS_PATH = define_iBooksFolder()
+IBOOKS_PATH = define_iBooksFolder() if USE_IBOOKS else ''

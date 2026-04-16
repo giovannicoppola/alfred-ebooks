@@ -1,5 +1,5 @@
-from config import log,TARGET_LIBRARY, KINDLE_APP, KINDLE_PATH, XML_CACHE, IBOOKS_PATH
-from kindle_fun import  get_kindle, get_ibooks, getDownloadedASINs, get_kindleClassic
+from config import log, USE_KINDLE, USE_IBOOKS, USE_YOMU, KINDLE_APP, KINDLE_PATH, XML_CACHE, IBOOKS_PATH, YOMU_DATA_DB
+from kindle_fun import  get_kindle, get_ibooks, getDownloadedASINs, get_kindleClassic, get_yomu
 import json
 from time import time
 
@@ -9,7 +9,7 @@ def main():
     log ("rebuilding database ⏳...")
     
     
-    if TARGET_LIBRARY in ["Kindle", "Both"]:
+    if USE_KINDLE:
         if KINDLE_APP == "classic":
 
             myContentBooks = getDownloadedASINs(KINDLE_PATH) # output is a list of downloaded book ASINs
@@ -24,9 +24,13 @@ def main():
             
 
 
-    if TARGET_LIBRARY in ["iBooks", "Both"]:
+    if USE_IBOOKS:
         get_ibooks(IBOOKS_PATH)
         log ("rebuilding iBooks database ...")
+
+    if USE_YOMU:
+        get_yomu(YOMU_DATA_DB)
+        log("rebuilding Yomu database ...")
 
     main_timeElapsed = time() - main_start_time
 

@@ -270,7 +270,37 @@ export PYTHONPATH="$PWD/lib"
 				<integer>102</integer>
 				<key>script</key>
 				<string>query=$1
-open "$1"</string>
+case "$1" in
+  yomu-open\|*)
+    payload=${1#yomu-open|}
+    meta_id=${payload%%|*}
+    rest=${payload#*|}
+    doc_id=${rest%%|*}
+    file_id=${rest#*|}
+    base_url="https://links.yomu-reader.com/intent-document?id="
+    suffix="&amp;source=intent-document-entity&amp;medium=intents"
+
+    open -a "/Applications/Yomu.app"
+    sleep 1
+
+    if [ -n "$meta_id" ]; then
+      open -a "/Applications/Yomu.app" "${base_url}${meta_id}${suffix}"
+      sleep 0.2
+    fi
+
+    if [ -n "$doc_id" ]; then
+      open -a "/Applications/Yomu.app" "${base_url}${doc_id}${suffix}"
+      sleep 0.2
+    fi
+
+    if [ -n "$file_id" ] &amp;&amp; [ "$file_id" != "$doc_id" ] &amp;&amp; [ "$file_id" != "$meta_id" ]; then
+      open -a "/Applications/Yomu.app" "${base_url}${file_id}${suffix}"
+    fi
+    ;;
+  *)
+    open "$1"
+    ;;
+esac</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -432,7 +462,7 @@ open "$1"</string>
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>keyword</key>
-				<string>!ksearch</string>
+				<string>!!ksearch</string>
 				<key>queuedelaycustom</key>
 				<integer>3</integer>
 				<key>queuedelayimmediatelyinitially</key>
@@ -807,31 +837,58 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>Kindle</string>
-				<key>pairs</key>
-				<array>
-					<array>
-						<string>Kindle</string>
-						<string>Kindle</string>
-					</array>
-					<array>
-						<string>Apple Books</string>
-						<string>iBooks</string>
-					</array>
-					<array>
-						<string>Both</string>
-						<string>Both</string>
-					</array>
-				</array>
+				<true/>
+				<key>required</key>
+				<false/>
+				<key>text</key>
+				<string>Search Kindle</string>
 			</dict>
 			<key>description</key>
-			<string>Search across Kindle, Apple Books, or both.</string>
+			<string>Include Kindle in search and refresh operations.</string>
 			<key>label</key>
-			<string>Target library</string>
+			<string>Kindle library</string>
 			<key>type</key>
-			<string>popupbutton</string>
+			<string>checkbox</string>
 			<key>variable</key>
-			<string>TARGET_LIBRARY</string>
+			<string>USE_KINDLE</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<true/>
+				<key>required</key>
+				<false/>
+				<key>text</key>
+				<string>Search Apple Books</string>
+			</dict>
+			<key>description</key>
+			<string>Include Apple Books in search and refresh operations.</string>
+			<key>label</key>
+			<string>Apple Books library</string>
+			<key>type</key>
+			<string>checkbox</string>
+			<key>variable</key>
+			<string>USE_IBOOKS</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<true/>
+				<key>required</key>
+				<false/>
+				<key>text</key>
+				<string>Search Yomu</string>
+			</dict>
+			<key>description</key>
+			<string>Include Yomu in search and refresh operations.</string>
+			<key>label</key>
+			<string>Yomu library</string>
+			<key>type</key>
+			<string>checkbox</string>
+			<key>variable</key>
+			<string>USE_YOMU</string>
 		</dict>
 		<dict>
 			<key>config</key>

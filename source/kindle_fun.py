@@ -1,7 +1,18 @@
 ## support functions for the alfred-eBook workflow
 
 from datetime import datetime, date
-from config import log, Book, KINDLE_PICKLE, IBOOKS_PICKLE, KINDLE_PATH,CACHE_FOLDER_IMAGES_KINDLE, CACHE_FOLDER_IMAGES_IBOOKS, MY_URL_STRING
+from config import (
+	log,
+	Book,
+	KINDLE_PICKLE,
+	IBOOKS_PICKLE,
+	YOMU_PICKLE,
+	KINDLE_PATH,
+	CACHE_FOLDER_IMAGES_KINDLE,
+	CACHE_FOLDER_IMAGES_IBOOKS,
+	MY_URL_STRING,
+	YOMU_EPUB_CACHE_DIR,
+)
 import os
 import sqlite3
 import biplist
@@ -10,6 +21,7 @@ import xmltodict
 import json
 import urllib.request
 import shutil
+import xml.etree.ElementTree as ET
 
 
 
@@ -69,6 +81,153 @@ def getDownloadedASINs(basepath):
 			}
 		}]}
 		print (json.dumps(result))
+
+
+def get_yomu(myDatabase, epub_cache_dir=None):
+	"""
+	Build a Book list from Yomu's local CoreData/SQLite store.
+
+	Yomu opening uses the document identifiers stored in its local database.
+	"""
+	if epub_cache_dir is None:
+		epub_cache_dir = YOMU_EPUB_CACHE_DIR
+
+	if not myDatabase or not os.path.exists(myDatabase):
+		log(f"Yomu database not found: {myDatabase}")
+		return []
+
+	conn = sqlite3.connect(myDatabase)
+	conn.row_factory = sqlite3.Row
+	c = conn.cursor()
+
+	def _yomu_find_cover_path(cache_dir, doc_identifier):
+		# 1) Most common (works for some books)
+		cover_jpg = f"{cache_dir}/{doc_identifier}/cover.jpg"
+		if os.path.exists(cover_jpg):
+			return cover_jpg
+
+		# 2) Parse OPF to locate the cover image (Durant uses this)
+		for opf_rel in ["content.opf", "OEBPS/content.opf", "OPS/content.opf"]:
+			opf_path = f"{cache_dir}/{doc_identifier}/{opf_rel}"
+			if not os.path.exists(opf_path):
+				continue
+			try:
+				root = ET.parse(opf_path).getroot()
+			except Exception:
+				continue
+
+			# Handle namespaced and non-namespaced OPF.
+			if root.tag.startswith("{"):
+				pkg_ns = root.tag.split("}")[0].strip("{")
+
+				def q(p):
+					return p.replace("opf:", f"{{{pkg_ns}}}")
+			else:
+				def q(p):
+					return p.replace("opf:", "")
+
+			cover_id = None
+			for m in root.findall(q(".//opf:metadata/opf:meta")):
+				if (m.get("name") or "").lower() == "cover":
+					cover_id = m.get("content")
+					break
+
+			if not cover_id:
+				continue
+
+			href = None
+			for item in root.findall(q(".//opf:manifest/opf:item")):
+				if item.get("id") == cover_id:
+					href = item.get("href")
+					break
+
+			if not href:
+				continue
+
+			# Some OPFs put the file next to the OPF; others use subfolders.
+			opf_dir = os.path.dirname(opf_rel)
+			if opf_dir:
+				cover_path = f"{cache_dir}/{doc_identifier}/{opf_dir}/{href}"
+			else:
+				cover_path = f"{cache_dir}/{doc_identifier}/{href}"
+
+			if os.path.exists(cover_path):
+				return cover_path
+
+		return None
+
+	def _decode_yomu_file_id(file_blob):
+		if not file_blob:
+			return ""
+		try:
+			decoded = file_blob[1:].decode("utf-8", "ignore").rstrip("\x00")
+			return decoded
+		except Exception:
+			return ""
+
+	# Tags are in CoreData link table Z_4TAGS (ZDOCUMENT <-> ZTAG).
+	# We aggregate tags so each Book becomes one Alfred item.
+	query = """
+		SELECT
+			d.Z_PK,
+			d.ZIDENTIFIER,
+			d.ZTITLE,
+			d.ZAUTHOR,
+			d.ZTYPE,
+			dm.ZIDENT,
+			dd.ZFILE,
+			GROUP_CONCAT(t.ZNAME, ', ') AS tags
+		FROM ZDOCUMENT d
+		LEFT JOIN ZDOCUMENTMETA dm
+			ON dm.ZDOCUMENT = d.Z_PK
+		LEFT JOIN ZDOCUMENTDATA dd
+			ON dd.ZDOCUMENT = d.Z_PK
+		LEFT JOIN Z_4TAGS rel
+			ON rel.Z_4DOCUMENTS = d.Z_PK
+		LEFT JOIN ZTAG t
+			ON t.Z_PK = rel.Z_9TAGS
+		GROUP BY
+			d.Z_PK,
+			d.ZIDENTIFIER,
+			d.ZTITLE,
+			d.ZAUTHOR,
+			d.ZTYPE,
+			dm.ZIDENT,
+			dd.ZFILE
+	"""
+
+	books = []
+	for row in c.execute(query):
+		identifier = row["ZIDENTIFIER"] or ""
+		meta_identifier = row["ZIDENT"] or ""
+		file_identifier = _decode_yomu_file_id(row["ZFILE"])
+		title = row["ZTITLE"] or ""
+		author = row["ZAUTHOR"] or ""
+		tags = row["tags"] or ""
+
+		# Best-effort icon extraction from Yomu's EPUB cache folder.
+		icon_path = _yomu_find_cover_path(epub_cache_dir, identifier) or "icons/ibooks.png"
+
+		book = Book(
+			title=title,
+			bookID=identifier,
+			path=f"yomu-open|{meta_identifier}|{identifier}|{file_identifier}",
+			icon_path=icon_path,
+			author=author,
+			book_desc=tags,
+			read_pct=0.0,
+			source="Yomu",
+			loaned=0,
+			downloaded=1,
+		)
+		books.append(book)
+
+	conn.close()
+
+	with open(YOMU_PICKLE, "wb") as file:
+		pickle.dump(books, file)
+
+	return books
 
 def get_kindleClassic (myFile, downloaded):
 	## Importing the XML table
