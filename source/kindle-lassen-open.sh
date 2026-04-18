@@ -1,11 +1,15 @@
 #!/bin/bash
 # Open a specific book in the new Kindle for Mac app (Lassen) from Alfred.
 #
-# Lassen exposes no deep-link / URL / file-open mechanism for "open this
-# specific book": kindle://, read.amazon.com/application/*, /gp/r.html, and
-# `open -a` on local BookManifest.kfx / .azw8 all just foreground the app.
-# There's no AppleScript dictionary, and Catalyst hides the view hierarchy
-# from the Accessibility API, so covers can't be targeted by AX role/label.
+# *** This is hacky and fragile. *** Lassen exposes no deep-link / URL /
+# file-open mechanism for "open this specific book": kindle://,
+# read.amazon.com/application/*, /gp/r.html, and `open -a` on local
+# BookManifest.kfx / .azw8 all just foreground the app. There's no
+# AppleScript dictionary, and Catalyst hides the view hierarchy from the
+# Accessibility API, so covers can't be targeted by AX role/label. The
+# only path that works is to drive the UI as if a human were doing it,
+# which means this script is sensitive to Kindle UI updates, layout
+# changes, screen resolution, and timing.
 # What does work is a UI-automation sequence:
 #   1. Foreground Kindle
 #   2. Detect state by walking the window's AX tree for any AXTextField:
