@@ -8,7 +8,13 @@ The `dev` branch introduces a major expansion of the alfred-kindle workflow, tra
 
 ## New Features
 
-### 1. Full-Text EPUB Search Engine (`searchEPUB.py`)
+### 1. Open a specific book in the new Kindle for Mac app (Lassen)
+
+Previously the workflow could list Kindle books but not open them — Lassen exposes no deep-link, AppleScript dictionary, or AX-targetable book covers. The new `kindle-lassen-open.sh` drives Kindle's UI as if a human were doing it: it walks the AX tree to detect library vs reader view, clicks the auto-hiding back-arrow toolbar to escape reader view if needed, focuses the search field via a coordinate click on its AX-reported center, types the book title, and double-clicks the first grid cell with Quartz HID events.
+
+This is **inherently hacky and fragile** — it will likely break on Kindle UI updates, layout changes, screen-resolution differences, or anything that perturbs timing — but it works today. Requires granting Accessibility permission to Alfred.
+
+### 2. Full-Text EPUB Search Engine (`searchEPUB.py`)
 
 The biggest addition: a ~1,340-line standalone search engine that searches the **actual text content** of EPUB files, not just metadata.
 
@@ -17,7 +23,7 @@ The biggest addition: a ~1,340-line standalone search engine that searches the *
 - Handles both standard `.epub` zip files and `.epub` directory bundles (as used by macOS Books app)
 - TOC-aware: identifies which chapter each match comes from
 
-### 2. Proximity Search
+### 3. Proximity Search
 
 When a query has exactly two words (e.g., `"love death"`), the engine automatically switches to **proximity search mode**, finding passages where both words appear within a configurable distance.
 
@@ -26,7 +32,7 @@ When a query has exactly two words (e.g., `"love death"`), the engine automatica
 - Distance semantics: 25 = same paragraph, 50 = nearby, 100 = same section, 200 = same chapter
 - Results show `word1 ... word2 (N words apart)`
 
-### 3. Alfred-Native Progressive Search
+### 4. Alfred-Native Progressive Search
 
 EPUB search is integrated into Alfred's UI with a progressive, stateful workflow:
 
@@ -36,14 +42,14 @@ EPUB search is integrated into Alfred's UI with a progressive, stateful workflow
 - **Drill-down UI**: first shows a book overview (one row per book with match counts), then lets you drill into individual matches within a specific book
 - Stable UIDs for consistent Alfred selection behavior
 
-### 4. Report Generation
+### 5. Report Generation
 
 Search results can be exported in two formats:
 
 - **Markdown reports**: formatted with matches grouped by book, context snippets, bold-highlighted search terms, and chapter attribution
 - **Modified EPUB files** (`--epub` flag): generates new EPUB files with yellow-highlighted search terms and an injected search results index chapter
 
-### 5. Improved Cover Image Extraction
+### 6. Improved Cover Image Extraction
 
 The `fetchImageCover()` function in `kindle_fun.py` was significantly expanded (from ~10 lines to ~150 lines):
 

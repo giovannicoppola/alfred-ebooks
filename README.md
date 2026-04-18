@@ -15,6 +15,7 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 
 <!-- MarkdownTOC autolink="true" bracket="round" depth="3" autoanchor="true" -->
 
+- [What's new](#whats-new)
 - [Motivation](#motivation)
 - [Setting up](#setting-up)
 - [Basic Usage](#usage)
@@ -24,6 +25,16 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 - [Feedback](#feedback)
 
 <!-- /MarkdownTOC -->
+
+
+
+<h1 id="whats-new">What's new ✨</h1>
+
+Highlights of the latest dev-branch work (full details in [whatsnew.md](whatsnew.md)):
+
+- **Open a specific book in the new Kindle for Mac app (Lassen)** — previously the workflow could only foreground the app; now ↩️ on a Kindle book opens that exact book via UI automation. *Hacky and fragile* (driven by mouse moves, clicks, and keystrokes — see the [Limitations](#known-issues) section), but it works today.
+- **Full-text EPUB search engine** with a 1,340-line standalone search engine, proximity search for two-word queries, an Alfred-native progressive UI, and Markdown / annotated-EPUB report generation.
+- **Improved cover-image extraction** for EPUBs (parses OPF manifests, handles zip and directory bundles, tries multiple cover naming conventions).
 
 
 
