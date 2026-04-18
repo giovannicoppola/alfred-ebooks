@@ -1,5 +1,5 @@
-from config import log, USE_KINDLE, USE_IBOOKS, USE_YOMU, KINDLE_APP, KINDLE_PATH, XML_CACHE, IBOOKS_PATH, YOMU_DATA_DB
-from kindle_fun import  get_kindle, get_ibooks, getDownloadedASINs, get_kindleClassic, get_yomu
+from config import log, USE_KINDLE, USE_IBOOKS, USE_YOMU, USE_CALIBRE, KINDLE_APP, KINDLE_PATH, XML_CACHE, IBOOKS_PATH, YOMU_DATA_DB, CALIBRE_METADATA_DB
+from kindle_fun import  get_kindle, get_ibooks, getDownloadedASINs, get_kindleClassic, get_yomu, get_calibre
 import json
 from time import time
 
@@ -31,6 +31,10 @@ def main():
     if USE_YOMU:
         get_yomu(YOMU_DATA_DB)
         log("rebuilding Yomu database ...")
+
+    if USE_CALIBRE:
+        get_calibre(CALIBRE_METADATA_DB)
+        log("rebuilding Calibre database ...")
 
     main_timeElapsed = time() - main_start_time
 

@@ -10,9 +10,11 @@ CACHE_FOLDER = os.getenv('alfred_workflow_cache')
 DATA_FOLDER = os.getenv('alfred_workflow_data')
 CACHE_FOLDER_IMAGES_KINDLE = CACHE_FOLDER+"/images/kindle/"
 CACHE_FOLDER_IMAGES_IBOOKS = CACHE_FOLDER+"/images/ibooks/"
+CACHE_FOLDER_IMAGES_CALIBRE = CACHE_FOLDER+"/images/calibre/"
 TIMESTAMP_KINDLE = CACHE_FOLDER+"/timestamp_kindle.txt"
 TIMESTAMP_IBOOKS = CACHE_FOLDER+"/timestamp_ibooks.txt"
 TIMESTAMP_YOMU = CACHE_FOLDER+"/timestamp_yomu.txt"
+TIMESTAMP_CALIBRE = CACHE_FOLDER+"/timestamp_calibre.txt"
 
 
 
@@ -50,6 +52,8 @@ if not os.path.exists(CACHE_FOLDER_IMAGES_KINDLE):
     move_images_to_newFolder(CACHE_FOLDER+"/images/", CACHE_FOLDER_IMAGES_KINDLE)
 if not os.path.exists(CACHE_FOLDER_IMAGES_IBOOKS):
     os.makedirs(CACHE_FOLDER_IMAGES_IBOOKS)
+if not os.path.exists(CACHE_FOLDER_IMAGES_CALIBRE):
+    os.makedirs(CACHE_FOLDER_IMAGES_CALIBRE)
 
 if not os.path.exists(DATA_FOLDER):
     os.makedirs(DATA_FOLDER)
@@ -57,6 +61,7 @@ if not os.path.exists(DATA_FOLDER):
 KINDLE_PICKLE = f"{DATA_FOLDER}/kindle_books.pkl"
 IBOOKS_PICKLE = f"{DATA_FOLDER}/ibooks_books.pkl"
 YOMU_PICKLE = f"{DATA_FOLDER}/yomu_books.pkl"
+CALIBRE_PICKLE = f"{DATA_FOLDER}/calibre_books.pkl"
 
 # Yomu defaults (can be overridden via environment variables in Alfred)
 YOMU_CONTAINER_ID = os.getenv('YOMU_CONTAINER_ID', 'net.cecinestpasparis.yomu')
@@ -72,6 +77,26 @@ YOMU_EPUB_CACHE_DIR = os.path.expanduser(
         f"~/Library/Containers/{YOMU_CONTAINER_ID}/Data/Library/Caches/EBook/EPub",
     )
 )
+CALIBRE_LIBRARY_PATH = os.path.expanduser(
+    (os.getenv('CALIBRE_LIBRARY_PATH', "~/Calibre Library") or "~/Calibre Library").strip()
+)
+_calibre_metadata_env = (os.getenv('CALIBRE_METADATA_DB', '') or '').strip()
+_calibre_metadata_from_library = os.path.join(CALIBRE_LIBRARY_PATH, "metadata.db")
+if _calibre_metadata_env:
+    _calibre_metadata_candidate = os.path.expanduser(_calibre_metadata_env)
+else:
+    _calibre_metadata_candidate = _calibre_metadata_from_library
+
+# If an explicit metadata path is stale/missing but the library-derived one exists,
+# prefer the library-derived DB so CALIBRE_LIBRARY_PATH works as expected.
+if (
+    _calibre_metadata_candidate != _calibre_metadata_from_library
+    and not os.path.exists(_calibre_metadata_candidate)
+    and os.path.exists(_calibre_metadata_from_library)
+):
+    _calibre_metadata_candidate = _calibre_metadata_from_library
+
+CALIBRE_METADATA_DB = _calibre_metadata_candidate
 
 def log(s, *args):
     if args:
@@ -189,6 +214,7 @@ def env_flag(name, default='1'):
 USE_KINDLE = env_flag('USE_KINDLE', '1')
 USE_IBOOKS = env_flag('USE_IBOOKS', '1')
 USE_YOMU = env_flag('USE_YOMU', '1')
+USE_CALIBRE = env_flag('USE_CALIBRE', '1')
 
 
 if USE_KINDLE:

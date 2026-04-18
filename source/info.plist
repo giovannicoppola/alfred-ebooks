@@ -5,11 +5,21 @@
 	<key>bundleid</key>
 	<string>giovanni.alfred-ebooks</string>
 	<key>category</key>
-	<string>myWorkflows</string>
+	<string>WIP</string>
 	<key>connections</key>
 	<dict>
 		<key>24764E8D-FF48-42E7-9B54-E9D177080FA5</key>
 		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>C201E860-5900-49B2-8980-4B8E5DA0A4C8</string>
+				<key>modifiers</key>
+				<integer>131072</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
 			<dict>
 				<key>destinationuid</key>
 				<string>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</string>
@@ -147,7 +157,7 @@
 				<key>spellchecking</key>
 				<integer>0</integer>
 				<key>stackview</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>type</key>
 			<string>alfred.workflow.userinterface.text</string>
@@ -270,37 +280,75 @@ export PYTHONPATH="$PWD/lib"
 				<integer>102</integer>
 				<key>script</key>
 				<string>query=$1
-case "$1" in
-  yomu-open\|*)
-    payload=${1#yomu-open|}
-    meta_id=${payload%%|*}
-    rest=${payload#*|}
-    doc_id=${rest%%|*}
-    file_id=${rest#*|}
-    base_url="https://links.yomu-reader.com/intent-document?id="
-    suffix="&amp;source=intent-document-entity&amp;medium=intents"
 
-    open -a "/Applications/Yomu.app"
-    sleep 1
+if [[ "$1" == yomu-open\|* ]]; then
+  payload=${1#yomu-open|}
+  meta_id=${payload%%|*}
+  rest=${payload#*|}
+  doc_id=${rest%%|*}
+  file_id=${rest#*|}
+  base_url="https://links.yomu-reader.com/intent-document?id="
+  suffix="&amp;source=intent-document-entity&amp;medium=intents"
 
-    if [ -n "$meta_id" ]; then
-      open -a "/Applications/Yomu.app" "${base_url}${meta_id}${suffix}"
-      sleep 0.2
+  open -a "/Applications/Yomu.app"
+  sleep 1
+
+  if [ -n "$meta_id" ]; then
+    open -a "/Applications/Yomu.app" "${base_url}${meta_id}${suffix}"
+    sleep 0.2
+  fi
+
+  if [ -n "$doc_id" ]; then
+    open -a "/Applications/Yomu.app" "${base_url}${doc_id}${suffix}"
+    sleep 0.2
+  fi
+
+  if [ -n "$file_id" ] &amp;&amp; [ "$file_id" != "$doc_id" ] &amp;&amp; [ "$file_id" != "$meta_id" ]; then
+    open -a "/Applications/Yomu.app" "${base_url}${file_id}${suffix}"
+  fi
+elif [[ "$1" == calibre-open\|* ]]; then
+  payload=${1#calibre-open|}
+  book_path=${payload%%|*}
+  open_location=""
+  if [ "$payload" != "$book_path" ]; then
+    open_location=${payload#*|}
+  fi
+
+  if [ -n "$open_location" ]; then
+    case "$open_location" in
+      toc:*|toc-href:*|toc-href-contains:*|ref:*|search:*|regex:*)
+        ;;
+      *)
+        open_location="toc-href-contains:$open_location"
+        ;;
+    esac
+  fi
+
+  viewer_bin=""
+  if command -v ebook-viewer &gt;/dev/null 2&gt;&amp;1; then
+    viewer_bin=$(command -v ebook-viewer)
+  elif [ -x "/Applications/calibre.app/Contents/MacOS/ebook-viewer" ]; then
+    viewer_bin="/Applications/calibre.app/Contents/MacOS/ebook-viewer"
+  fi
+
+  if [ -n "$viewer_bin" ]; then
+    if [ -n "$open_location" ]; then
+      (
+        nohup "$viewer_bin" --open-at="$open_location" "$book_path" &gt;/dev/null 2&gt;&amp;1 ||
+        nohup "$viewer_bin" "$book_path" &gt;/dev/null 2&gt;&amp;1
+      ) &amp;
+    else
+      nohup "$viewer_bin" "$book_path" &gt;/dev/null 2&gt;&amp;1 &amp;
     fi
-
-    if [ -n "$doc_id" ]; then
-      open -a "/Applications/Yomu.app" "${base_url}${doc_id}${suffix}"
-      sleep 0.2
-    fi
-
-    if [ -n "$file_id" ] &amp;&amp; [ "$file_id" != "$doc_id" ] &amp;&amp; [ "$file_id" != "$meta_id" ]; then
-      open -a "/Applications/Yomu.app" "${base_url}${file_id}${suffix}"
-    fi
-    ;;
-  *)
-    open "$1"
-    ;;
-esac</string>
+  else
+    # Last resort: open with system default app to avoid triggering Calibre import dialogs.
+    open "$book_path"
+  fi
+elif [[ "$1" == kindle-lassen-open\|* ]]; then
+  bash "${PWD}/kindle-lassen-open.sh" "$1"
+else
+  open "$1"
+fi</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -366,38 +414,6 @@ esac</string>
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>conditions</key>
-				<array>
-					<dict>
-						<key>inputstring</key>
-						<string>{var:action}</string>
-						<key>matchcasesensitive</key>
-						<false/>
-						<key>matchmode</key>
-						<integer>1</integer>
-						<key>matchstring</key>
-						<string>drill_down_book</string>
-						<key>outputlabel</key>
-						<string>Markdown</string>
-						<key>uid</key>
-						<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
-					</dict>
-				</array>
-				<key>elselabel</key>
-				<string>else</string>
-				<key>hideelse</key>
-				<false/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.conditional</string>
-			<key>uid</key>
-			<string>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>alfredfiltersresults</key>
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
@@ -449,59 +465,48 @@ esac</string>
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>alfredfiltersresults</key>
+				<key>conditions</key>
+				<array>
+					<dict>
+						<key>inputstring</key>
+						<string>{var:action}</string>
+						<key>matchcasesensitive</key>
+						<false/>
+						<key>matchmode</key>
+						<integer>1</integer>
+						<key>matchstring</key>
+						<string>drill_down_book</string>
+						<key>outputlabel</key>
+						<string>Markdown</string>
+						<key>uid</key>
+						<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
+					</dict>
+					<dict>
+						<key>inputstring</key>
+						<string>{var:action}</string>
+						<key>matchcasesensitive</key>
+						<false/>
+						<key>matchmode</key>
+						<integer>1</integer>
+						<key>matchstring</key>
+						<string>open_match</string>
+						<key>outputlabel</key>
+						<string>Open Match</string>
+						<key>uid</key>
+						<string>A2D06D9D-7E28-4B98-A9D2-19E2F3BBE8E1</string>
+					</dict>
+				</array>
+				<key>elselabel</key>
+				<string>else</string>
+				<key>hideelse</key>
 				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<true/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>0</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string>!!ksearch</string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
-				<false/>
-				<key>queuedelaymode</key>
-				<integer>1</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string>⏳...fetching Kindle info...</string>
-				<key>script</key>
-				<string>query=$1
-export PYTHONPATH="$PWD/lib"
-/usr/bin/python3 searchEPUB.py "$1" --book="$curr_book" --alfred
-</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string></string>
-				<key>title</key>
-				<string>searching... 📚</string>
-				<key>type</key>
-				<integer>5</integer>
-				<key>withspace</key>
-				<true/>
-			</dict>
-			<key>inboundconfig</key>
-			<dict>
-				<key>externalid</key>
-				<string>mainSearch</string>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
+			<string>alfred.workflow.utility.conditional</string>
 			<key>uid</key>
-			<string>24764E8D-FF48-42E7-9B54-E9D177080FA5</string>
+			<string>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</string>
 			<key>version</key>
-			<integer>3</integer>
+			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -562,6 +567,63 @@ export PYTHONPATH="$PWD/lib"
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>0</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>!!ksearch</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<false/>
+				<key>queuedelaymode</key>
+				<integer>1</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>⏳...fetching Kindle info...</string>
+				<key>script</key>
+				<string>query=$1
+export PYTHONPATH="$PWD/lib"
+/usr/bin/python3 searchEPUB.py "$1" --book="$curr_book" --alfred
+</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string>searching... 📚</string>
+				<key>type</key>
+				<integer>5</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>inboundconfig</key>
+			<dict>
+				<key>externalid</key>
+				<string>mainSearch</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>24764E8D-FF48-42E7-9B54-E9D177080FA5</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
 	</array>
 	<key>readme</key>
 	<string># alfred-eBooks 📚
@@ -570,7 +632,7 @@ List, open, and search your eBooks ebooks with Alfred
 
 ## Motivation ✅
 
-- Quickly list, search, and open your eBooks
+- Quickly list, search, and open your Kindle, Apple Books, Yomu, and Calibre ebooks
 
 
 ## Setting up ⚙️
@@ -588,7 +650,9 @@ List, open, and search your eBooks ebooks with Alfred
 	- set the book content icon, i.e. if a book has been downloaded locally (default: 📘)
 	- set the 'ghost' book icon, i.e. if a book has not been downloaded or previously loaned (default: 👻)
 	- show 'ghost' books (i.e. books not downloaded, or previously loaned)?  (default: yes)
-	- set target library (Kindle, Apple Books, or both. Default: 'Both')
+	- set target libraries (Kindle, Apple Books, Yomu, and/or Calibre)
+	- set `Calibre library path` if your library is not at `~/Calibre Library`
+	- set `Calibre metadata DB path` to override auto-detection (optional)
 	- set search scope (default: 'Title')
 		- `Title`: search titles only
 		- `Author`: search authors only
@@ -604,14 +668,21 @@ List, open, and search your eBooks ebooks with Alfred
 	- `--d` will filter for downloaded books
 	- `--k` will filter for Kindle books
 	- `--ib` will filter for Apple Books books
+	- `--c` will filter for Calibre books
 	- `--read` will filter for read books
-- `enter` ↩️ will open the book in Apple Books (if downloaded) or the corresponding webpage on Amazon (if not downloaded)
+- `enter` ↩️ will open the selected result in its source app (Kindle, Apple Books, Yomu, or Calibre)
+- `cmd+enter` on a book result runs full-text search in that book (when supported)
+- on match rows:
+	- `enter` ↩️ opens the markdown/context view
+	- `shift+enter` ↩️ opens the book at the matched chapter/location (Calibre)
 - data is automatically cached for best performance. You can force a database refresh using the keyword `::books-refresh`
 
 ## Limitations &amp; known issues ⚠️
 
 - I could not figure out how to open a specific book in the Kindle app via command line. If you know how to do that, let me know!
 - I could not figure out how the Kindle app can tell if a book was first loaned, then purchased. Currently, if that is the case (i.e. a book was first loaned, then purchased), the book will appear as loaned.
+- Full-text book search currently supports EPUB content. Non-EPUB formats (for example MOBI/AZW3/PDF) can be listed/opened, but search-inside-book is EPUB-only.
+- For Calibre match opens, EPUBs are reflowable, so jumping is chapter/locator based rather than fixed "page number" precise.
 - not tested thoroughly for user-uploaded documents.
 
 
@@ -635,9 +706,9 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		<key>24764E8D-FF48-42E7-9B54-E9D177080FA5</key>
 		<dict>
 			<key>xpos</key>
-			<real>935</real>
+			<real>930</real>
 			<key>ypos</key>
-			<real>335</real>
+			<real>480</real>
 		</dict>
 		<key>28939AD5-7FDB-44B4-87C5-BFCA352716C7</key>
 		<dict>
@@ -672,9 +743,9 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		<key>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</key>
 		<dict>
 			<key>xpos</key>
-			<real>1140</real>
+			<real>1155</real>
 			<key>ypos</key>
-			<real>265</real>
+			<real>355</real>
 		</dict>
 		<key>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</key>
 		<dict>
@@ -707,9 +778,9 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		<key>C9F9AE76-99B2-4432-91CD-AF8D39A92E25</key>
 		<dict>
 			<key>xpos</key>
-			<real>1275</real>
+			<real>1365</real>
 			<key>ypos</key>
-			<real>180</real>
+			<real>210</real>
 		</dict>
 		<key>EFFEB21A-8303-4FE0-8B9D-0302BE4E21EA</key>
 		<dict>
@@ -889,6 +960,67 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<string>checkbox</string>
 			<key>variable</key>
 			<string>USE_YOMU</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<true/>
+				<key>required</key>
+				<false/>
+				<key>text</key>
+				<string>Search Calibre</string>
+			</dict>
+			<key>description</key>
+			<string>Include Calibre in search and refresh operations.</string>
+			<key>label</key>
+			<string>Calibre library</string>
+			<key>type</key>
+			<string>checkbox</string>
+			<key>variable</key>
+			<string>USE_CALIBRE</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>~/Calibre Library</string>
+				<key>placeholder</key>
+				<string>/absolute/path/to/Calibre Library</string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>Path to your Calibre library folder (contains metadata.db).</string>
+			<key>label</key>
+			<string>Calibre library path</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>CALIBRE_LIBRARY_PATH</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string></string>
+				<key>placeholder</key>
+				<string>/absolute/path/to/metadata.db</string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>Optional explicit path to Calibre metadata.db (overrides folder path).</string>
+			<key>label</key>
+			<string>Calibre metadata DB path</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>CALIBRE_METADATA_DB</string>
 		</dict>
 		<dict>
 			<key>config</key>

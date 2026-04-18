@@ -21,9 +21,13 @@ from config import (
 	YOMU_DATA_DB,
 	TIMESTAMP_YOMU,
 	YOMU_PICKLE,
+	CALIBRE_METADATA_DB,
+	TIMESTAMP_CALIBRE,
+	CALIBRE_PICKLE,
 	USE_KINDLE,
 	USE_IBOOKS,
 	USE_YOMU,
+	USE_CALIBRE,
 )
 from time import time
 
@@ -31,7 +35,7 @@ from time import time
 import sys
 import json
 import pickle
-from kindle_fun import get_kindle, get_ibooks, get_yomu, checkTimeStamp, getDownloadedASINs, get_kindleClassic
+from kindle_fun import get_kindle, get_ibooks, get_yomu, get_calibre, checkTimeStamp, getDownloadedASINs, get_kindleClassic
 
 
 MYINPUT = sys.argv[1].casefold()
@@ -59,6 +63,10 @@ def search_books(books, search_string):
 	if '--ib' in search_string:
 		search_string = search_string.replace('--ib', '')
 		books = [book for book in books if book.source == 'iBooks']
+
+	if '--c' in search_string:
+		search_string = search_string.replace('--c', '')
+		books = [book for book in books if book.source == 'Calibre']
 	
 	if '--read' in search_string:
 		search_string = search_string.replace('--read', '')
@@ -141,6 +149,13 @@ def serveBooks(books, result):
 				# Alfred subtitles get cramped quickly with long tag lists.
 				if len(tagsPart) > 90:
 					tagsPart = tagsPart[:87] + "..."
+		open_arg = myBook.path
+		if myBook.source == "Kindle" and KINDLE_APP == "new" and myBook.bookID:
+			# The new Kindle Mac app has no deep-link to a specific book; the
+			# shell script drives the library "Search Kindle" field via UI
+			# automation, so we pass the title along with the ASIN.
+			open_arg = f"kindle-lassen-open|{myBook.bookID}|{myBook.title}"
+
 		result["items"].append({
 			"title": f"{myBook.title} {loanedString} {downloadedString}",
 			'subtitle': (
@@ -159,7 +174,7 @@ def serveBooks(books, result):
 					"valid": True,
 					"subtitle": myBook.icon_path
 			}},
-			'arg': myBook.path
+			'arg': open_arg
 		})
 	
 
@@ -244,6 +259,19 @@ def main():
 
 		if os.path.exists(YOMU_PICKLE):
 			with open(YOMU_PICKLE, 'rb') as file:
+				myBooks = myBooks + pickle.load(file)
+
+	if USE_CALIBRE:
+		if not os.path.exists(CALIBRE_PICKLE):
+			log("building new Calibre database")
+			get_calibre(CALIBRE_METADATA_DB)
+
+		elif os.path.exists(CALIBRE_METADATA_DB) and checkTimeStamp(CALIBRE_METADATA_DB, TIMESTAMP_CALIBRE):
+			log("outdated, building new Calibre database")
+			get_calibre(CALIBRE_METADATA_DB)
+
+		if os.path.exists(CALIBRE_PICKLE):
+			with open(CALIBRE_PICKLE, 'rb') as file:
 				myBooks = myBooks + pickle.load(file)
 
 			

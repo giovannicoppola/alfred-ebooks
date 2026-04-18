@@ -1,7 +1,7 @@
 # alfred-eBooks📚
 
 
-### List and open your Kindle and Apple Books ebooks with [Alfred 5](https://www.alfredapp.com/) 
+### List, search, and open your Kindle, Apple Books, Yomu, and Calibre ebooks with [Alfred 5](https://www.alfredapp.com/) 
 
 
 
@@ -29,14 +29,14 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 
 <h1 id="motivation">Motivation ✅</h1>
 
-- Quickly list, search, and open your Kindle and Apple Books ebooks
+- Quickly list, search, and open your Kindle, Apple Books, Yomu, and Calibre ebooks
 
 
 <h1 id="setting-up">Setting up ⚙️</h1>
 
 - Alfred 5 with Powerpack license
 - Python3 (howto [here](https://www.freecodecamp.org/news/python-version-on-mac-update/))
-- Kindle or Apple Books apps installed
+- Kindle, Apple Books, Yomu, or Calibre installed
 - Download `alfred-eBooks` [latest release](https://github.com/giovannicoppola/alfred-kindle/releases/latest)
 
 
@@ -48,7 +48,9 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 	- set the book content icon, i.e. if a book has been downloaded locally (default: 📘)
 	- set the 'ghost' book icon, i.e. if a book has not been downloaded or previously loaned (default: 👻)
 	- show 'ghost' books (i.e. books not downloaded, or previously loaned)? (default: yes)
-	- set target library (Kindle, Apple Books, or both. Default: 'Both')
+	- set target libraries (Kindle, Apple Books, Yomu, and/or Calibre)
+	- set `Calibre library path` if your library is not at `~/Calibre Library`
+	- set `Calibre metadata DB path` to override auto-detection (optional)
 
 	_Note: `alfred-eBooks` will search for Kindle Classic and the (new) Kindle app. If both are installed, the latter with be used._
 	- set search scope (default: 'Title')
@@ -66,16 +68,23 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 	- `--d` will filter for downloaded books
 	- `--k` will filter for Kindle books
 	- `--ib` will filter for Apple Books books
+	- `--c` will filter for Calibre books
 	- `--read` will filter for read books
-- `enter` ↩️ will open the book in Apple Books (if downloaded) or the corresponding webpage on Amazon (if not downloaded)
+- `enter` ↩️ will open the selected result in its source app (Kindle, Apple Books, Yomu, or Calibre)
+- `cmd+enter` on a book result runs full-text search in that book (when supported)
+- on match rows:
+	- `enter` ↩️ opens the markdown/context view
+	- `shift+enter` ↩️ opens the book at the matched chapter/location (Calibre)
 - data is automatically cached for best performance. You can force a database refresh using the keyword `::books-refresh`
 
 
 
 <h1 id="known-issues">Limitations & known issues ⚠️</h1>
 
-- I could not figure out how to open a specific book in the Kindle app via command line. If you know how to do that, let me know!
+- The **new** Kindle for Mac app (Lassen) exposes no way to deep-link to a specific book from outside: no supported URL scheme opens a book, there's no AppleScript dictionary, and Catalyst hides the view hierarchy from the Accessibility API so covers can't be targeted by AX role/label. ↩️ works around this with a UI-automation sequence: Kindle is foregrounded, then the AX tree is walked to detect whether we're on the library (any `AXTextField` is exposed) or in reader view (only opaque `AXGroup`s and window chrome). If we're in reader view, the script slides the cursor into the auto-hiding top toolbar and clicks the back-arrow at its left edge to return to the library. The search text field is then clicked at its AX-reported center to focus it (Cmd+F doesn't refocus once the library is in search-results sub-state, and Catalyst ignores AX SetFocused), the existing query is cleared with Cmd+A + Delete, the book title is typed, Return filters the library to that book, and a Quartz-posted double-click on the first grid cell opens it. This requires granting **Accessibility permission to Alfred** in *System Settings → Privacy & Security → Accessibility*. Caveats: the back-arrow is clicked at `(winX+30, winY+55)` and the book-cell double-click at `(30%, 22%)` of the window — both are layout-dependent heuristics; tweak them in `kindle-lassen-open.sh` if they miss on your setup.
 - I could not figure out how the Kindle app can tell if a book was first loaned, then purchased. Currently, if that is the case (i.e. a book was first loaned, then purchased), the book will appear as loaned.
+- Full-text book search currently supports EPUB content. Non-EPUB formats (for example MOBI/AZW3/PDF) can be listed/opened, but search-inside-book is EPUB-only.
+- For Calibre match opens, EPUBs are reflowable, so jumping is chapter/locator based rather than fixed "page number" precise.
 - not tested thoroughly for user-uploaded documents.
 
 

@@ -7,11 +7,14 @@ from config import (
 	KINDLE_PICKLE,
 	IBOOKS_PICKLE,
 	YOMU_PICKLE,
+	CALIBRE_PICKLE,
 	KINDLE_PATH,
 	CACHE_FOLDER_IMAGES_KINDLE,
 	CACHE_FOLDER_IMAGES_IBOOKS,
+	CACHE_FOLDER_IMAGES_CALIBRE,
 	MY_URL_STRING,
 	YOMU_EPUB_CACHE_DIR,
+	CALIBRE_LIBRARY_PATH,
 )
 import os
 import sqlite3
@@ -225,6 +228,120 @@ def get_yomu(myDatabase, epub_cache_dir=None):
 	conn.close()
 
 	with open(YOMU_PICKLE, "wb") as file:
+		pickle.dump(books, file)
+
+	return books
+
+
+def get_calibre(metadata_db_path, calibre_library_path=None):
+	"""
+	Build a Book list from Calibre's metadata.db.
+
+	Calibre stores book files under:
+	  <library>/<relative path from books.path>/<data.name>.<format>
+	"""
+	if calibre_library_path is None:
+		calibre_library_path = CALIBRE_LIBRARY_PATH
+
+	if not metadata_db_path or not os.path.exists(metadata_db_path):
+		log(f"Calibre metadata DB not found: {metadata_db_path}")
+		with open(CALIBRE_PICKLE, "wb") as file:
+			pickle.dump([], file)
+		return []
+
+	conn = sqlite3.connect(metadata_db_path)
+	conn.row_factory = sqlite3.Row
+	c = conn.cursor()
+
+	# Build a per-book map of available formats.
+	format_rows = c.execute(
+		"SELECT book, format, name FROM data WHERE format IS NOT NULL AND name IS NOT NULL"
+	).fetchall()
+	formats_by_book = {}
+	for row in format_rows:
+		book_id = row["book"]
+		formats_by_book.setdefault(book_id, []).append(
+			{
+				"format": (row["format"] or "").lower(),
+				"name": row["name"] or "",
+			}
+		)
+
+	query = """
+		SELECT
+			b.id AS book_id,
+			b.title,
+			b.path AS book_path,
+			b.author_sort,
+			cm.text AS comments,
+			GROUP_CONCAT(a.name, '; ') AS authors
+		FROM books b
+		LEFT JOIN comments cm
+			ON cm.book = b.id
+		LEFT JOIN books_authors_link bal
+			ON bal.book = b.id
+		LEFT JOIN authors a
+			ON a.id = bal.author
+		GROUP BY b.id, b.title, b.path, b.author_sort, cm.text
+	"""
+
+	preferred_formats = ["epub", "azw3", "kfx", "mobi", "pdf"]
+	books = []
+
+	for row in c.execute(query):
+		book_id = row["book_id"]
+		book_path = row["book_path"] or ""
+		title = row["title"] or ""
+		author = row["authors"] or row["author_sort"] or ""
+		book_desc = row["comments"] or ""
+		book_formats = formats_by_book.get(book_id, [])
+		book_file = ""
+
+		if book_formats:
+			format_map = {fmt["format"]: fmt["name"] for fmt in book_formats if fmt.get("format")}
+			selected_format = next(
+				(fmt for fmt in preferred_formats if fmt in format_map),
+				book_formats[0]["format"],
+			)
+			filename_base = format_map.get(selected_format)
+			if filename_base and book_path:
+				book_file = os.path.join(
+					calibre_library_path,
+					book_path,
+					f"{filename_base}.{selected_format}",
+				)
+
+		if not book_file:
+			continue
+
+		cover_source = os.path.join(calibre_library_path, book_path, "cover.jpg")
+		icon_path = f"{CACHE_FOLDER_IMAGES_CALIBRE}{book_id}.jpg"
+		if os.path.exists(cover_source):
+			try:
+				if not os.path.exists(icon_path):
+					shutil.copy2(cover_source, icon_path)
+			except Exception:
+				icon_path = "icons/ibooks.png"
+		else:
+			icon_path = "icons/ibooks.png"
+
+		book = Book(
+			title=title,
+			bookID=str(book_id),
+			path=f"calibre-open|{book_file}",
+			icon_path=icon_path,
+			author=author,
+			book_desc=book_desc,
+			read_pct=0.0,
+			source="Calibre",
+			loaned=0,
+			downloaded=1,
+		)
+		books.append(book)
+
+	conn.close()
+
+	with open(CALIBRE_PICKLE, "wb") as file:
 		pickle.dump(books, file)
 
 	return books

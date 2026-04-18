@@ -698,7 +698,7 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
     return json.dumps(alfred_json, indent=2, ensure_ascii=False)
 
 
-def export_alfred_json(results, search_text, progress_info=None, context_words=3):
+def export_alfred_json(results, search_text, progress_info=None, context_words=3, book_open_arg=""):
     """
     Export search results in Alfred JSON format.
     
@@ -808,19 +808,34 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
                 if len(context) > 80:
                     context = context[:77] + "..."
                 
+                match_arg = json.dumps({
+                    "book": book_title,
+                    "chapter": chapter,
+                    "match": result['match'],
+                    "context": result.get('context', ''),
+                    "search_term": search_text
+                })
+                open_location = result.get('file', '')
+                match_mods = {}
+                if book_open_arg and open_location:
+                    match_mods["shift"] = {
+                        "valid": True,
+                        "subtitle": "Open this match location in the book",
+                        "arg": f"{book_open_arg}|{open_location}",
+                        "variables": {
+                            "action": "open_match",
+                            "open_location": open_location,
+                        },
+                    }
+
                 alfred_items.append({
                     "uid": f"zzzz-match-{hash(book_title)}-{i}",
                     "title": f"   └─ {result['match']} • {display_location}",
                     "subtitle": context,
                     "icon": {"path": "icon.png"},
                     "valid": True,
-                    "arg": json.dumps({
-                        "book": book_title,
-                        "chapter": chapter,
-                        "match": result['match'],
-                        "context": result.get('context', ''),
-                        "search_term": search_text
-                    }),
+                    "arg": match_arg,
+                    "mods": match_mods,
                     "variables": {
                         "action": "view_match",
                         "book_title": book_title,
@@ -829,7 +844,8 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
                         "context": result.get('context', ''),
                         "search_term": search_text,
                         "markdown": result.get('markdown', ''),
-                        "context_words": str(context_words)
+                        "context_words": str(context_words),
+                        "open_location": open_location
                     }
                 })
             
@@ -1030,6 +1046,7 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
                         "match": match.group(),
                         "context": context_text,
                         "markdown": markdown_match,
+                        "file": item.get_name(),
                     })
         
         # Create modified EPUB if requested
@@ -1190,6 +1207,26 @@ def get_book_title_from_path(epub_path):
     return os.path.splitext(os.path.basename(epub_path))[0]
 
 
+def parse_book_input(book_input):
+    """
+    Parse workflow-specific book arguments.
+
+    Supports:
+      - regular filesystem paths
+      - calibre-open|/abs/path/to/book.epub
+      - calibre-open|/abs/path/to/book.epub|optional-location
+    """
+    if not book_input:
+        return {"book_path": "", "open_arg": ""}
+
+    if book_input.startswith("calibre-open|"):
+        payload = book_input[len("calibre-open|") :]
+        book_path = payload.split("|", 1)[0]
+        return {"book_path": book_path, "open_arg": f"calibre-open|{book_path}"}
+
+    return {"book_path": book_input, "open_arg": ""}
+
+
 def main():
     """Main function to handle command line arguments"""
     args = docopt(__doc__, version='EPUB Search Tool 1.0')
@@ -1262,16 +1299,36 @@ def main():
 
     
     # Determine search mode: single book or folder
+    book_open_arg = ""
+
     if args['--book'] and args['--book'].strip():
         # Search single EPUB file
-        epub_path = os.path.expanduser(args['--book'])
+        parsed_book = parse_book_input(args['--book'])
+        epub_path = os.path.expanduser(parsed_book["book_path"])
+        book_open_arg = parsed_book["open_arg"]
+        if alfred_format:
+            _, ext = os.path.splitext(epub_path.lower())
+            if ext != ".epub":
+                unsupported_json = {
+                    "items": [
+                        {
+                            "uid": "unsupported-format",
+                            "title": "⚠️ Search supports EPUB files only",
+                            "subtitle": f"This book is '{ext or 'unknown'}'. Convert/add an EPUB format in Calibre to search inside it.",
+                            "icon": {"path": "icons/Warning.png"},
+                            "valid": False,
+                        }
+                    ]
+                }
+                print(json.dumps(unsupported_json, indent=2, ensure_ascii=False))
+                return 0
         if alfred_format:
             # For single book, search and output Alfred JSON directly
             import sys
             print(f"[DEBUG] Starting single book search for '{search_text}'...", file=sys.stderr)
             results = search_single_epub(epub_path, search_text, context_words, create_epub, quiet=True, proximity_distance=proximity_distance)
             print(f"[DEBUG] Search completed. Found {len(results) if results else 0} matches.", file=sys.stderr)
-            json_output = export_alfred_json(results, search_text, context_words=context_words)
+            json_output = export_alfred_json(results, search_text, context_words=context_words, book_open_arg=book_open_arg)
             print(json_output)
             # Also output to stderr for debugging
             import sys
@@ -1317,7 +1374,7 @@ def main():
             json_output = export_alfred_books_overview(results, search_text, progress_info)
         else:
             # For single book search, show individual matches
-            json_output = export_alfred_json(results, search_text, context_words=context_words)
+            json_output = export_alfred_json(results, search_text, context_words=context_words, book_open_arg=book_open_arg)
         
         sys.stdout.write(json_output + '\n')
         sys.stdout.flush()
