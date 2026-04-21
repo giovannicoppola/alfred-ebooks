@@ -4,10 +4,15 @@ from datetime import datetime, date
 from config import (
 	log,
 	Book,
+	Highlight,
 	KINDLE_PICKLE,
 	IBOOKS_PICKLE,
 	YOMU_PICKLE,
 	CALIBRE_PICKLE,
+	KINDLE_HL_PICKLE,
+	IBOOKS_HL_PICKLE,
+	YOMU_HL_PICKLE,
+	CALIBRE_HL_PICKLE,
 	KINDLE_PATH,
 	CACHE_FOLDER_IMAGES_KINDLE,
 	CACHE_FOLDER_IMAGES_IBOOKS,
@@ -17,6 +22,7 @@ from config import (
 	CALIBRE_LIBRARY_PATH,
 )
 import os
+import re
 import sqlite3
 import biplist
 import pickle
@@ -217,11 +223,12 @@ def get_yomu(myDatabase, epub_cache_dir=None):
 			path=f"yomu-open|{meta_identifier}|{identifier}|{file_identifier}",
 			icon_path=icon_path,
 			author=author,
-			book_desc=tags,
+			book_desc="",
 			read_pct=0.0,
 			source="Yomu",
 			loaned=0,
 			downloaded=1,
+			tags=tags,
 		)
 		books.append(book)
 
@@ -266,6 +273,19 @@ def get_calibre(metadata_db_path, calibre_library_path=None):
 				"name": row["name"] or "",
 			}
 		)
+
+	# Pre-aggregate tags per book. Doing it in a sub-select keeps the cardinality
+	# of the outer join sane (authors + tags together would multiply rows).
+	tag_rows = c.execute(
+		"""
+		SELECT btl.book AS book_id, t.name AS tag_name
+		FROM books_tags_link btl
+		JOIN tags t ON t.id = btl.tag
+		"""
+	).fetchall()
+	tags_by_book = {}
+	for row in tag_rows:
+		tags_by_book.setdefault(row["book_id"], []).append(row["tag_name"] or "")
 
 	query = """
 		SELECT
@@ -325,6 +345,10 @@ def get_calibre(metadata_db_path, calibre_library_path=None):
 		else:
 			icon_path = "icons/ibooks.png"
 
+		book_tags = ", ".join(
+			name for name in tags_by_book.get(book_id, []) if name
+		)
+
 		book = Book(
 			title=title,
 			bookID=str(book_id),
@@ -336,6 +360,7 @@ def get_calibre(metadata_db_path, calibre_library_path=None):
 			source="Calibre",
 			loaned=0,
 			downloaded=1,
+			tags=book_tags,
 		)
 		books.append(book)
 
@@ -580,11 +605,83 @@ def fetchImageCover(epub_path, ICON_PATH):
 
 	
 
+def _get_ibooks_collections(conn):
+	"""
+	Return dict: asset_id (ZASSETID) -> list of user-facing Collection names.
+
+	Apple Books keeps Collections in the same BKLibrary sqlite the rest of
+	get_ibooks already reads. We filter out Apple-managed "library type"
+	collections (All / Books / PDFs / Audiobooks / My Books) which are
+	automatic and not useful as tags. User-managed collections (both the
+	built-ins like "Want to Read" / "Finished" and custom UUID-ID ones) are
+	kept.
+
+	Runs defensively: if the tables are missing on this macOS version we
+	return an empty dict instead of breaking the library build.
+	"""
+	collections = {}
+	try:
+		cur = conn.cursor()
+		tables = {
+			row[0]
+			for row in cur.execute(
+				"SELECT name FROM sqlite_master WHERE type='table'"
+			)
+		}
+		if 'ZBKCOLLECTION' not in tables or 'ZBKCOLLECTIONMEMBER' not in tables:
+			return collections
+
+		# Apple's library-type and auto-populated collections carry fixed
+		# ZCOLLECTIONIDs. We skip these because they are automatic and would
+		# add noise (e.g. every downloaded book is in "Downloaded"). User-
+		# manageable system shelves like "Want to Read" and "Finished" are
+		# kept because users actually curate them.
+		system_ids = {
+			'All_Collection_ID',
+			'Books_Collection_ID',
+			'Pdfs_Collection_ID',
+			'AudioBooks_Collection_ID',
+			'Downloaded_Collection_ID',
+			'Samples_Collection_ID',
+		}
+
+		rows = cur.execute(
+			"""
+			SELECT m.ZASSETID AS asset_id, col.ZTITLE AS title, col.ZCOLLECTIONID AS cid
+			FROM ZBKCOLLECTIONMEMBER m
+			JOIN ZBKCOLLECTION col
+				ON col.Z_PK = m.ZCOLLECTION
+			WHERE m.ZASSETID IS NOT NULL
+				AND col.ZTITLE IS NOT NULL
+				AND COALESCE(col.ZHIDDEN, 0) = 0
+				AND COALESCE(col.ZDELETEDFLAG, 0) = 0
+			"""
+		).fetchall()
+
+		for r in rows:
+			aid = r['asset_id']
+			title = (r['title'] or '').strip()
+			cid = r['cid'] or ''
+			if not aid or not title:
+				continue
+			if cid in system_ids:
+				continue
+			if cid.startswith('My_Books_Collection_'):
+				continue
+			bucket = collections.setdefault(aid, [])
+			if title not in bucket:
+				bucket.append(title)
+	except Exception as e:
+		log(f"iBooks collections lookup failed: {e}")
+	return collections
+
+
 def get_ibooks(myDatabase):
 	books = []
 	conn = sqlite3.connect(myDatabase)
 	conn.row_factory = sqlite3.Row
 	c = conn.cursor()
+	collections_by_asset = _get_ibooks_collections(conn)
 	c.execute('''SELECT "_rowid_",* FROM "main"."ZBKLIBRARYASSET" ORDER BY "_rowid_" ASC LIMIT 0, 49999;''')
 	data = c.fetchall()
 	
@@ -623,10 +720,11 @@ def get_ibooks(myDatabase):
 			ICON_PATH = "icons/ibooks.png"
 			
 		
+		book_tags = ", ".join(collections_by_asset.get(row['ZASSETID'], []))
+
 		book = Book(
 			title=row['ZTITLE'],
-			bookID="",
-			
+			bookID=row['ZASSETID'] or "",
 			path=row['ZPATH'],
 			icon_path=ICON_PATH,
 			author=row['ZAUTHOR'],
@@ -634,9 +732,9 @@ def get_ibooks(myDatabase):
 			read_pct=row['ZREADINGPROGRESS'],
 			source="iBooks",
 			loaned=0,
-			downloaded=downloaded
-			
-			)
+			downloaded=downloaded,
+			tags=book_tags,
+		)
 		books.append(book)
 
 	conn.close()
@@ -754,7 +852,471 @@ def get_kindle(myDatabase):
 	return books
 
 
+# ---------------------------------------------------------------------------
+# Highlights extractors. Each returns a list[Highlight] and pickles it to the
+# corresponding *_HL_PICKLE file. All are best-effort and log + return [] when
+# the source DB isn't available, so the main query path can call them
+# unconditionally.
+# ---------------------------------------------------------------------------
 
-   
 
-             
+# Core Data / CFAbsoluteTime uses a Jan-1-2001 epoch; convert to ISO-ish.
+_CORE_DATA_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01
+
+
+def _core_data_ts_to_iso(ts):
+	if ts is None:
+		return ""
+	try:
+		unix = float(ts) + _CORE_DATA_EPOCH_OFFSET
+		return datetime.utcfromtimestamp(unix).strftime("%Y-%m-%d %H:%M")
+	except Exception:
+		return ""
+
+
+def _unix_ms_to_iso(ts):
+	if ts is None:
+		return ""
+	try:
+		unix = float(ts)
+		# The Kindle KSDK stores ms-since-epoch; some rows are seconds already.
+		if unix > 1e12:
+			unix = unix / 1000.0
+		return datetime.utcfromtimestamp(unix).strftime("%Y-%m-%d %H:%M")
+	except Exception:
+		return ""
+
+
+def get_ibooks_highlights(annotation_db_path):
+	"""
+	Pull highlights + notes from Apple Books' AEAnnotation sqlite.
+	Links back to Book.bookID via ZANNOTATIONASSETID.
+	"""
+	highlights = []
+	if not annotation_db_path or not os.path.exists(annotation_db_path):
+		log(f"iBooks annotation DB not found: {annotation_db_path}")
+		with open(IBOOKS_HL_PICKLE, "wb") as f:
+			pickle.dump(highlights, f)
+		return highlights
+
+	try:
+		conn = sqlite3.connect(f"file:{annotation_db_path}?mode=ro", uri=True)
+	except Exception as e:
+		log(f"iBooks annotation DB open failed: {e}")
+		with open(IBOOKS_HL_PICKLE, "wb") as f:
+			pickle.dump(highlights, f)
+		return highlights
+
+	conn.row_factory = sqlite3.Row
+	try:
+		rows = conn.execute(
+			"""
+			SELECT
+				ZANNOTATIONASSETID AS asset_id,
+				ZANNOTATIONSELECTEDTEXT AS text,
+				ZANNOTATIONNOTE AS note,
+				ZANNOTATIONLOCATION AS location,
+				ZANNOTATIONSTYLE AS style,
+				ZANNOTATIONISUNDERLINE AS is_underline,
+				ZANNOTATIONCREATIONDATE AS created,
+				ZANNOTATIONMODIFICATIONDATE AS modified
+			FROM ZAEANNOTATION
+			WHERE COALESCE(ZANNOTATIONDELETED, 0) = 0
+				AND ZANNOTATIONASSETID IS NOT NULL
+				AND (
+					ZANNOTATIONSELECTEDTEXT IS NOT NULL
+					OR ZANNOTATIONNOTE IS NOT NULL
+				)
+			"""
+		).fetchall()
+	except Exception as e:
+		log(f"iBooks annotation DB query failed: {e}")
+		rows = []
+	finally:
+		conn.close()
+
+	for row in rows:
+		asset_id = row["asset_id"] or ""
+		text = row["text"] or ""
+		note = row["note"] or ""
+		style_name = "underline" if row["is_underline"] else "highlight"
+		if not text and note:
+			style_name = "note"
+		h = Highlight(
+			book_id=asset_id,
+			source="iBooks",
+			text=text,
+			note=note,
+			location=row["location"] or "",
+			color=str(row["style"]) if row["style"] is not None else "",
+			created=_core_data_ts_to_iso(row["created"]),
+			modified=_core_data_ts_to_iso(row["modified"]),
+			style=style_name,
+			# ibooks://assetid/<uuid> is the documented deep-link scheme for
+			# opening a specific asset in Apple Books. There's no reliable
+			# CFI-based deep-link (Apple doesn't expose one), so we just open
+			# the book; the user lands roughly where they left off.
+			arg=f"ibooks://assetid/{asset_id}" if asset_id else "",
+		)
+		highlights.append(h)
+
+	with open(IBOOKS_HL_PICKLE, "wb") as f:
+		pickle.dump(highlights, f)
+	log(f"iBooks highlights: {len(highlights)}")
+	return highlights
+
+
+def get_calibre_highlights(metadata_db_path):
+	"""
+	Pull highlights + notes from Calibre's metadata.db `annotations` table.
+	Calibre 5.x+ stores the highlighted text in `searchable_text` and a JSON
+	blob with start/end CFIs in `annot_data`. Only populated for books opened
+	in Calibre's Viewer — imported-but-never-viewed books have no annotations.
+	"""
+	highlights = []
+	if not metadata_db_path or not os.path.exists(metadata_db_path):
+		with open(CALIBRE_HL_PICKLE, "wb") as f:
+			pickle.dump(highlights, f)
+		return highlights
+
+	try:
+		conn = sqlite3.connect(f"file:{metadata_db_path}?mode=ro", uri=True)
+	except Exception as e:
+		log(f"Calibre DB open failed: {e}")
+		with open(CALIBRE_HL_PICKLE, "wb") as f:
+			pickle.dump(highlights, f)
+		return highlights
+
+	conn.row_factory = sqlite3.Row
+	try:
+		tables = {
+			r[0] for r in conn.execute(
+				"SELECT name FROM sqlite_master WHERE type='table'"
+			)
+		}
+		if 'annotations' not in tables:
+			log("Calibre annotations table not present (older Calibre?)")
+			with open(CALIBRE_HL_PICKLE, "wb") as f:
+				pickle.dump(highlights, f)
+			return highlights
+
+		rows = conn.execute(
+			"""
+			SELECT
+				book AS book_id,
+				annot_type AS annot_type,
+				annot_data AS annot_data,
+				searchable_text AS searchable_text,
+				timestamp AS timestamp,
+				format AS format
+			FROM annotations
+			"""
+		).fetchall()
+	except Exception as e:
+		log(f"Calibre annotations query failed: {e}")
+		rows = []
+	finally:
+		conn.close()
+
+	for row in rows:
+		data = {}
+		try:
+			data = json.loads(row["annot_data"] or "{}")
+		except Exception:
+			pass
+
+		text = (data.get("highlighted_text") or row["searchable_text"] or "").strip()
+		note = (data.get("notes") or "").strip()
+		start_cfi = data.get("start_cfi") or data.get("pos") or ""
+
+		style_name = (row["annot_type"] or "highlight").lower()
+		# Calibre uses "bookmark" / "highlight"; map unknowns to "highlight".
+		if style_name not in ("highlight", "bookmark", "note"):
+			style_name = "highlight"
+
+		created = ""
+		try:
+			ts = row["timestamp"]
+			if ts is not None:
+				created = datetime.utcfromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M")
+		except Exception:
+			pass
+
+		book_id_str = str(row["book_id"])
+		h = Highlight(
+			book_id=book_id_str,
+			source="Calibre",
+			text=text,
+			note=note,
+			location=start_cfi,
+			color=str(data.get("style", {}).get("kind", "")) if isinstance(data.get("style"), dict) else "",
+			created=created,
+			modified=created,
+			style=style_name,
+			# The existing calibre-open handler takes `calibre-open|<file>` and
+			# optionally a trailing `|<location>`. We don't know the file path
+			# here (that lives on Book.path), so hand the query layer just the
+			# book id + CFI and let it join at display time.
+			arg=f"calibre-highlight|{book_id_str}|{start_cfi}",
+		)
+		highlights.append(h)
+
+	with open(CALIBRE_HL_PICKLE, "wb") as f:
+		pickle.dump(highlights, f)
+	log(f"Calibre highlights: {len(highlights)}")
+	return highlights
+
+
+def get_yomu_highlights(yomu_data_db):
+	"""
+	Pull highlights + notes from Yomu's CoreData ZANNOTATION table. Joined to
+	ZDOCUMENT so we can emit the Yomu document identifier as book_id (matches
+	Book.bookID for Yomu rows).
+	"""
+	highlights = []
+	if not yomu_data_db or not os.path.exists(yomu_data_db):
+		with open(YOMU_HL_PICKLE, "wb") as f:
+			pickle.dump(highlights, f)
+		return highlights
+
+	try:
+		conn = sqlite3.connect(f"file:{yomu_data_db}?mode=ro", uri=True)
+	except Exception as e:
+		log(f"Yomu DB open failed: {e}")
+		with open(YOMU_HL_PICKLE, "wb") as f:
+			pickle.dump(highlights, f)
+		return highlights
+
+	conn.row_factory = sqlite3.Row
+	try:
+		# NOTE on ZSTATE: Yomu stores a small integer here whose meaning
+		# isn't publicly documented. Empirically, a locally-created
+		# highlight has ZSTATE=1 (NOT 0), so an earlier `ZSTATE = 0`
+		# filter silently dropped every real user highlight. Until we
+		# identify a specific state value that reliably means
+		# "soft-deleted / archived", we include every row and let the
+		# downstream code treat it as active. If users ever report that
+		# deleted highlights resurface here, revisit this with a known
+		# bad state value.
+		rows = conn.execute(
+			"""
+			SELECT
+				a.ZTEXT AS text,
+				a.ZANNOTATION AS note,
+				a.ZTYPE AS type,
+				a.ZREF AS ref,
+				a.ZCREATED AS created,
+				a.ZMODIFIED AS modified,
+				a.ZSTATE AS state,
+				d.ZIDENTIFIER AS doc_identifier
+			FROM ZANNOTATION a
+			LEFT JOIN ZDOCUMENT d ON d.Z_PK = a.ZDOCUMENT
+			"""
+		).fetchall()
+	except Exception as e:
+		log(f"Yomu annotations query failed: {e}")
+		rows = []
+	finally:
+		conn.close()
+
+	for row in rows:
+		doc_id = row["doc_identifier"] or ""
+		style_name = (row["type"] or "highlight").lower()
+		if style_name not in ("highlight", "note", "bookmark", "underline"):
+			style_name = "highlight"
+		h = Highlight(
+			book_id=doc_id,
+			source="Yomu",
+			text=row["text"] or "",
+			note=row["note"] or "",
+			location=row["ref"] or "",
+			created=_core_data_ts_to_iso(row["created"]),
+			modified=_core_data_ts_to_iso(row["modified"]),
+			style=style_name,
+			# Reuse the existing yomu-open handler, which re-opens the book by
+			# document identifier. Yomu has no known CFI deep-link scheme.
+			arg=f"yomu-open||{doc_id}|" if doc_id else "",
+		)
+		highlights.append(h)
+
+	with open(YOMU_HL_PICKLE, "wb") as f:
+		pickle.dump(highlights, f)
+	log(f"Yomu highlights: {len(highlights)}")
+	return highlights
+
+
+# Regex to pull the ASIN out of Kindle annotation identifiers like
+# "A:B00DACZ9K6-0" (ZRAWBOOKID) and "B00C5R7HMU-EBOK-CR!...-1" (dataset_id).
+_KINDLE_ASIN_RE = re.compile(r'(?:^|[^A-Z0-9])([A-Z0-9]{10})(?:[^A-Z0-9]|$)')
+
+
+def _extract_kindle_asin(raw):
+	if not raw:
+		return ""
+	m = _KINDLE_ASIN_RE.search(raw)
+	return m.group(1) if m else ""
+
+
+def get_kindle_highlights(annot_storage_path, ksdk_annot_db_path):
+	"""
+	Build a Highlight list for the new Kindle (Lassen) app.
+
+	Amazon strips the selected *passage text* from the local DBs, so HIGHLIGHT
+	entries carry no `text`. We still emit them so per-book counts work and so
+	the user can see their notes + jump to the cloud notebook. NOTE entries
+	have a user-typed `note_text` in the KSDK payload and *are* recoverable.
+
+	We prefer KSDK rows when both stores reference the same annotation because
+	KSDK carries the note payload and timestamps in ms. Entries from
+	AnnotationStorage that aren't in KSDK are added by (ASIN, ZLONGPOSITION)
+	so counts stay correct when the sync layer is behind.
+	"""
+	highlights = []
+
+	by_key = {}
+
+	# KSDK pass. Each row has a JSON payload with type, positions, note text,
+	# and modification time.
+	if ksdk_annot_db_path and os.path.exists(ksdk_annot_db_path):
+		try:
+			conn = sqlite3.connect(f"file:{ksdk_annot_db_path}?mode=ro", uri=True)
+			conn.row_factory = sqlite3.Row
+			try:
+				tables = {
+					r[0] for r in conn.execute(
+						"SELECT name FROM sqlite_master WHERE type='table'"
+					)
+				}
+				if 'server_view' in tables:
+					rows = conn.execute(
+						"""
+						SELECT dataset_id, annotation_id, serialized_payload,
+							created_time, modified_time
+						FROM server_view
+						"""
+					).fetchall()
+				else:
+					rows = []
+			finally:
+				conn.close()
+		except Exception as e:
+			log(f"Kindle KSDK open/query failed: {e}")
+			rows = []
+
+		for row in rows:
+			try:
+				payload = json.loads(row["serialized_payload"] or "{}")
+			except Exception:
+				continue
+
+			book_data = payload.get("book_data") or {}
+			asin = (book_data.get("asin") or "").strip()
+			if not asin:
+				asin = _extract_kindle_asin(row["dataset_id"])
+			if not asin:
+				continue
+
+			p_type = (payload.get("type") or "").upper()
+			style_name = {
+				"HIGHLIGHT": "highlight",
+				"NOTE": "note",
+				"BOOKMARK": "bookmark",
+			}.get(p_type, "highlight")
+			# Skip bookmarks from counts+UI by default; they're not highlights.
+			if style_name == "bookmark":
+				continue
+
+			note_text = ""
+			try:
+				jm = payload.get("json_metadata")
+				if isinstance(jm, str) and jm:
+					jm = json.loads(jm)
+				if isinstance(jm, dict):
+					note_text = (jm.get("note_text") or "").strip()
+			except Exception:
+				pass
+
+			start = payload.get("start_position", {}) or {}
+			end = payload.get("end_position", {}) or {}
+			start_pos = start.get("shortPosition") or start.get("longPosition") or ""
+			end_pos = end.get("shortPosition") or end.get("longPosition") or ""
+			location = f"{start_pos}-{end_pos}" if (start_pos or end_pos) else ""
+
+			modified = payload.get("last_modified") or row["modified_time"]
+
+			key = (asin, str(start_pos), str(end_pos))
+			h = Highlight(
+				book_id=asin,
+				source="Kindle",
+				text="",  # Amazon does not expose the selected passage locally
+				note=note_text,
+				location=location,
+				created=_unix_ms_to_iso(row["created_time"]),
+				modified=_unix_ms_to_iso(modified),
+				style=style_name,
+				# Amazon's cloud notebook is the only place the highlight text
+				# actually exists, so we deep-link there.
+				arg=f"https://read.amazon.com/notebook?asin={asin}&contentLimitState=&",
+			)
+			by_key[key] = h
+
+	# AnnotationStorage fallback for anything KSDK didn't see.
+	if annot_storage_path and os.path.exists(annot_storage_path):
+		try:
+			conn = sqlite3.connect(f"file:{annot_storage_path}?mode=ro", uri=True)
+			conn.row_factory = sqlite3.Row
+			try:
+				rows = conn.execute(
+					"""
+					SELECT ZRAWBOOKID AS raw_book_id,
+						ZLONGSTART AS long_start,
+						ZLONGEND AS long_end,
+						ZRAWSTART AS raw_start,
+						ZRAWEND AS raw_end,
+						ZRAWANNOTATIONTYPE AS annot_type,
+						ZUSERTEXT AS user_text,
+						ZNUMHIGHLIGHTERS AS num_highlighters
+					FROM ZANNOTATION
+					"""
+				).fetchall()
+			finally:
+				conn.close()
+		except Exception as e:
+			log(f"Kindle AnnotationStorage open/query failed: {e}")
+			rows = []
+
+		for row in rows:
+			asin = _extract_kindle_asin(row["raw_book_id"])
+			if not asin:
+				continue
+			# ZRAWANNOTATIONTYPE examples: "lpr" (last page read), "hlt"
+			# (highlight), "nt" (note), "bkm" (bookmark). Keep highlights and
+			# notes; skip the rest so progress bookmarks don't inflate counts.
+			t = (row["annot_type"] or "").lower()
+			if t not in ("hlt", "nt", ""):
+				continue
+			style_name = {"hlt": "highlight", "nt": "note"}.get(t, "highlight")
+
+			start = row["long_start"] or str(row["raw_start"] or "")
+			end = row["long_end"] or str(row["raw_end"] or "")
+			key = (asin, str(start), str(end))
+			if key in by_key:
+				# Already covered by KSDK row, which has richer metadata.
+				continue
+			h = Highlight(
+				book_id=asin,
+				source="Kindle",
+				text="",
+				note=(row["user_text"] or "").strip(),
+				location=f"{start}-{end}" if (start or end) else "",
+				style=style_name,
+				arg=f"https://read.amazon.com/notebook?asin={asin}&contentLimitState=&",
+			)
+			by_key[key] = h
+
+	highlights = list(by_key.values())
+
+	with open(KINDLE_HL_PICKLE, "wb") as f:
+		pickle.dump(highlights, f)
+	log(f"Kindle highlights: {len(highlights)}")
+	return highlights

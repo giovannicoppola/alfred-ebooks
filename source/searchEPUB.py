@@ -828,6 +828,15 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
                         },
                     }
 
+                # `fragment_id` is the shared footer-label variable used
+                # by both the highlights drill-down and this in-book
+                # search path, so the downstream markdown/text-view node
+                # can render a single-line footer like "— {fragment_id}".
+                # We prefer a meaningful chapter title when available and
+                # fall back to the raw XHTML file name (the actual
+                # fragment locator inside the EPUB).
+                fragment_id = chapter if not is_uninformative else result.get('file', '') or chapter
+
                 alfred_items.append({
                     "uid": f"zzzz-match-{hash(book_title)}-{i}",
                     "title": f"   └─ {result['match']} • {display_location}",
@@ -840,6 +849,7 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
                         "action": "view_match",
                         "book_title": book_title,
                         "chapter": chapter,
+                        "fragment_id": fragment_id,
                         "match_text": result['match'],
                         "context": result.get('context', ''),
                         "search_term": search_text,
@@ -1037,9 +1047,14 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
                         + " ".join(context_after)
                     )
                     
-                    # Create markdown representation
-                    markdown_match = f"**{match.group()}** found in *{chapter_title}*:\n\n{context_text}\n"
-                    
+                    # Markdown body is just the bolded excerpt — the
+                    # "found in *chapter*" header used to sit on top here
+                    # but duplicated info already shown in the Alfred row
+                    # and the downstream markdown/text-view footer
+                    # (sourced from the `fragment_id` variable, see the
+                    # Alfred-item builder below).
+                    markdown_match = f"{context_text}\n"
+
                     book_results.append({
                         "book_title": book_title,
                         "chapter": chapter_title,

@@ -8,6 +8,33 @@
 	<string>WIP</string>
 	<key>connections</key>
 	<dict>
+		<key>04664B4B-E922-48E7-9DC8-492207C157B8</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>28939AD5-7FDB-44B4-87C5-BFCA352716C7</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>sourceoutputuid</key>
+				<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>C201E860-5900-49B2-8980-4B8E5DA0A4C8</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>sourceoutputuid</key>
+				<string>A2D06D9D-7E28-4B98-A9D2-19E2F3BBE8E1</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
 		<key>24764E8D-FF48-42E7-9B54-E9D177080FA5</key>
 		<array>
 			<dict>
@@ -28,7 +55,7 @@
 				<key>modifiersubtext</key>
 				<string></string>
 				<key>vitoclose</key>
-				<false/>
+				<true/>
 			</dict>
 		</array>
 		<key>487CE6DD-5966-4E3E-9D67-EF1D60023887</key>
@@ -103,13 +130,13 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>C201E860-5900-49B2-8980-4B8E5DA0A4C8</string>
+				<string>04664B4B-E922-48E7-9DC8-492207C157B8</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
 				<string></string>
 				<key>vitoclose</key>
-				<false/>
+				<true/>
 			</dict>
 			<dict>
 				<key>destinationuid</key>
@@ -118,6 +145,16 @@
 				<integer>262144</integer>
 				<key>modifiersubtext</key>
 				<string>search this book</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</string>
+				<key>modifiers</key>
+				<integer>524288</integer>
+				<key>modifiersubtext</key>
+				<string>list highlights</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -143,7 +180,7 @@
 				<key>fontsizing</key>
 				<integer>0</integer>
 				<key>footertext</key>
-				<string></string>
+				<string>{var:fragment_id}</string>
 				<key>inputfile</key>
 				<string></string>
 				<key>inputtype</key>
@@ -169,107 +206,48 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>concurrently</key>
+				<key>conditions</key>
+				<array>
+					<dict>
+						<key>inputstring</key>
+						<string>{var:action}</string>
+						<key>matchcasesensitive</key>
+						<false/>
+						<key>matchmode</key>
+						<integer>0</integer>
+						<key>matchstring</key>
+						<string>show_highlight</string>
+						<key>outputlabel</key>
+						<string>Markdown</string>
+						<key>uid</key>
+						<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
+					</dict>
+					<dict>
+						<key>inputstring</key>
+						<string>{var:action}</string>
+						<key>matchcasesensitive</key>
+						<false/>
+						<key>matchmode</key>
+						<integer>1</integer>
+						<key>matchstring</key>
+						<string>open_match</string>
+						<key>outputlabel</key>
+						<string>Open Match</string>
+						<key>uid</key>
+						<string>A2D06D9D-7E28-4B98-A9D2-19E2F3BBE8E1</string>
+					</dict>
+				</array>
+				<key>elselabel</key>
+				<string>else</string>
+				<key>hideelse</key>
 				<false/>
-				<key>escaping</key>
-				<integer>68</integer>
-				<key>script</key>
-				<string>on run argv
-
-tell application "System Events"
-	tell process "Books"
-		-- Give Books a moment to settle its window state
-		delay 0.5
-
-		repeat with w in windows
-			try
-				set wName to name of w as text
-				set roleDesc to role description of w
-
-				-- Only close the main library window
-				if wName is "All" or roleDesc is "main window" then
-					if (exists button 1 of w) then
-						click button 1 of w
-						do shell script "echo Closed library window (" &amp; quoted form of wName &amp; ") 1&gt;&amp;2"
-					end if
-				else
-					do shell script "echo Skipped window: " &amp; quoted form of wName &amp; " [" &amp; roleDesc &amp; "] 1&gt;&amp;2"
-				end if
-
-			on error errMsg
-				do shell script "echo Error: " &amp; quoted form of errMsg &amp; " 1&gt;&amp;2"
-			end try
-		end repeat
-	end tell
-end tell
-
-
-end run</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>type</key>
-				<integer>6</integer>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.action.script</string>
+			<string>alfred.workflow.utility.conditional</string>
 			<key>uid</key>
-			<string>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</string>
+			<string>04664B4B-E922-48E7-9DC8-492207C157B8</string>
 			<key>version</key>
-			<integer>2</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>alfredfiltersresults</key>
-				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<true/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>1</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string>{var:mainkeyword}</string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
-				<true/>
-				<key>queuedelaymode</key>
-				<integer>0</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string>⏳...fetching Kindle info...</string>
-				<key>script</key>
-				<string>query=$1
-export PYTHONPATH="$PWD/lib"
-/usr/bin/python3 kindle-query.py "$1"
-</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string></string>
-				<key>title</key>
-				<string>alfred-kindle 📚</string>
-				<key>type</key>
-				<integer>5</integer>
-				<key>withspace</key>
-				<true/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
-			<key>uid</key>
-			<string>EFFEB21A-8303-4FE0-8B9D-0302BE4E21EA</string>
-			<key>version</key>
-			<integer>3</integer>
+			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -362,6 +340,115 @@ fi</string>
 			<string>C201E860-5900-49B2-8980-4B8E5DA0A4C8</string>
 			<key>version</key>
 			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>concurrently</key>
+				<false/>
+				<key>escaping</key>
+				<integer>68</integer>
+				<key>script</key>
+				<string>on run argv
+
+tell application "System Events"
+	tell process "Books"
+		-- Give Books a moment to settle its window state
+		delay 0.5
+
+		repeat with w in windows
+			try
+				set wName to name of w as text
+				set roleDesc to role description of w
+
+				-- Only close the main library window
+				if wName is "All" or roleDesc is "main window" then
+					if (exists button 1 of w) then
+						click button 1 of w
+						do shell script "echo Closed library window (" &amp; quoted form of wName &amp; ") 1&gt;&amp;2"
+					end if
+				else
+					do shell script "echo Skipped window: " &amp; quoted form of wName &amp; " [" &amp; roleDesc &amp; "] 1&gt;&amp;2"
+				end if
+
+			on error errMsg
+				do shell script "echo Error: " &amp; quoted form of errMsg &amp; " 1&gt;&amp;2"
+			end try
+		end repeat
+	end tell
+end tell
+
+
+end run</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>type</key>
+				<integer>6</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.script</string>
+			<key>uid</key>
+			<string>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>{var:mainkeyword}</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>⏳...fetching Kindle info...</string>
+				<key>script</key>
+				<string>export PYTHONPATH="$PWD/lib"
+/usr/bin/python3 kindle-query.py "$1"
+</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string>alfred-kindle 📚</string>
+				<key>type</key>
+				<integer>5</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>inboundconfig</key>
+			<dict>
+				<key>externalid</key>
+				<string>main_query</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>EFFEB21A-8303-4FE0-8B9D-0302BE4E21EA</string>
+			<key>version</key>
+			<integer>3</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -465,6 +552,26 @@ fi</string>
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>argument</key>
+				<string></string>
+				<key>passthroughargument</key>
+				<false/>
+				<key>variables</key>
+				<dict>
+					<key>curr_book</key>
+					<string>{query}</string>
+				</dict>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.utility.argument</string>
+			<key>uid</key>
+			<string>487CE6DD-5966-4E3E-9D67-EF1D60023887</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>conditions</key>
 				<array>
 					<dict>
@@ -505,26 +612,6 @@ fi</string>
 			<string>alfred.workflow.utility.conditional</string>
 			<key>uid</key>
 			<string>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>argument</key>
-				<string></string>
-				<key>passthroughargument</key>
-				<false/>
-				<key>variables</key>
-				<dict>
-					<key>curr_book</key>
-					<string>{query}</string>
-				</dict>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.argument</string>
-			<key>uid</key>
-			<string>487CE6DD-5966-4E3E-9D67-EF1D60023887</string>
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
@@ -595,8 +682,7 @@ fi</string>
 				<key>runningsubtext</key>
 				<string>⏳...fetching Kindle info...</string>
 				<key>script</key>
-				<string>query=$1
-export PYTHONPATH="$PWD/lib"
+				<string>export PYTHONPATH="$PWD/lib"
 /usr/bin/python3 searchEPUB.py "$1" --book="$curr_book" --alfred
 </string>
 				<key>scriptargtype</key>
@@ -623,6 +709,25 @@ export PYTHONPATH="$PWD/lib"
 			<string>24764E8D-FF48-42E7-9B54-E9D177080FA5</string>
 			<key>version</key>
 			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>main_query</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</string>
+			<key>version</key>
+			<integer>1</integer>
 		</dict>
 	</array>
 	<key>readme</key>
@@ -703,6 +808,13 @@ List, open, and search your eBooks ebooks with Alfred
 Feedback welcome! If you notice a bug, or have ideas for new features, please feel free to get in touch either on [Github](https://github.com/giovannicoppola/alfred-kindle), or on the [Alfred](https://www.alfredforum.com) forum.</string>
 	<key>uidata</key>
 	<dict>
+		<key>04664B4B-E922-48E7-9DC8-492207C157B8</key>
+		<dict>
+			<key>xpos</key>
+			<real>655</real>
+			<key>ypos</key>
+			<real>40</real>
+		</dict>
 		<key>24764E8D-FF48-42E7-9B54-E9D177080FA5</key>
 		<dict>
 			<key>xpos</key>
@@ -731,6 +843,13 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<key>ypos</key>
 			<real>460</real>
 		</dict>
+		<key>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</key>
+		<dict>
+			<key>xpos</key>
+			<real>695</real>
+			<key>ypos</key>
+			<real>615</real>
+		</dict>
 		<key>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</key>
 		<dict>
 			<key>note</key>
@@ -743,9 +862,9 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		<key>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</key>
 		<dict>
 			<key>xpos</key>
-			<real>1155</real>
+			<real>1205</real>
 			<key>ypos</key>
-			<real>355</real>
+			<real>380</real>
 		</dict>
 		<key>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</key>
 		<dict>
@@ -764,9 +883,9 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		<key>C201E860-5900-49B2-8980-4B8E5DA0A4C8</key>
 		<dict>
 			<key>xpos</key>
-			<real>725</real>
+			<real>815</real>
 			<key>ypos</key>
-			<real>115</real>
+			<real>90</real>
 		</dict>
 		<key>C4CF391F-F6A5-48BE-B5D0-B018D1393DA7</key>
 		<dict>
@@ -893,10 +1012,18 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 						<string>Both</string>
 						<string>Both</string>
 					</array>
+					<array>
+						<string>Tags</string>
+						<string>Tags</string>
+					</array>
+					<array>
+						<string>All</string>
+						<string>All</string>
+					</array>
 				</array>
 			</dict>
 			<key>description</key>
-			<string>Search across book title, author, or both.</string>
+			<string>Search across book title, author, tags/collections, or all of them.</string>
 			<key>label</key>
 			<string>Search Scope</string>
 			<key>type</key>

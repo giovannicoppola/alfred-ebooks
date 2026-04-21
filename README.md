@@ -68,6 +68,8 @@ Highlights of the latest dev-branch work (full details in [whatsnew.md](whatsnew
 		- `Title`: search titles only
 		- `Author`: search authors only
 		- `Both`: search across titles and authors
+		- `Tags`: search tags / Apple Books Collections / Calibre tags / Yomu tags only
+		- `All`: search titles, authors, and tags
 
 
 <h1 id="usage">Basic Usage 📖</h1>
@@ -81,6 +83,23 @@ Highlights of the latest dev-branch work (full details in [whatsnew.md](whatsnew
 	- `--ib` will filter for Apple Books books
 	- `--c` will filter for Calibre books
 	- `--read` will filter for read books
+	- `--tagged` will filter for books that have at least one tag
+	- `--tag <name>` narrows to books whose tags match `<name>` (substring, case-insensitive). Can be combined, e.g. `--tag sci-fi --tag favorite`
+	- `--highlights` switches into cross-library highlight search. Bare `--highlights` shows a summary (per-source counts + top books by highlight count). `--highlights <words>` returns a flat list of highlights whose text / note matches. Combine with a source filter, e.g. `--ib --highlights solitude`
+- tags / collections are surfaced in the subtitle (🏷️) and come from:
+	- **Apple Books** user Collections (e.g. "Want to Read", "Finished", and any custom collections you've created)
+	- **Calibre** tags (the `tags` column from `metadata.db`)
+	- **Yomu** tags
+- highlights are surfaced in the subtitle (💬 N) when a book has any. Sources:
+	- **Apple Books**: full highlight text, user notes, and location (from `AEAnnotation/*.sqlite`)
+	- **Calibre**: full highlight text + notes for books opened in Calibre's Viewer (from the `annotations` table in `metadata.db`)
+	- **Yomu**: full highlight text + notes (from `ZANNOTATION`)
+	- **Kindle**: counts + user-typed notes only — Amazon strips the highlighted passage text from local storage. Selecting a Kindle highlight opens `https://read.amazon.com/notebook?asin=<ASIN>` where the text lives.
+- on a **book row** with highlights:
+	- `⌥↩` re-enters the workflow in drill-down mode: one highlight per Alfred row, full passage text as the title, location / date / note in the subtitle. Start typing after the operator to substring-filter that book's highlights in place.
+	- `⌘L` (Alfred's native Large Type) shows every highlight for the book in fullscreen big text.
+	- `⌘C` copies every highlight for the book as plain text (handy for pasting into Obsidian / notes).
+- on a **highlight row**: `↩` opens the book (Apple Books deep-link, Calibre Viewer at CFI, Yomu by document id, Kindle cloud notebook); `⌘↩` copies just that highlight's text; `⌘L` shows just that highlight in Large Type.
 - `enter` ↩️ will open the selected result in its source app (Kindle, Apple Books, Yomu, or Calibre)
 - `cmd+enter` on a book result runs full-text search in that book (when supported)
 - on match rows:
