@@ -27,6 +27,7 @@ from config import (
 	YOMU_HL_PICKLE,
 	CALIBRE_HL_PICKLE,
 	YOMU_DATA_DB,
+	YOMU_EPUB_CACHE_DIR,
 	TIMESTAMP_YOMU,
 	YOMU_PICKLE,
 	CALIBRE_METADATA_DB,
@@ -56,7 +57,7 @@ from kindle_fun import (
 	get_yomu_highlights,
 	get_calibre_highlights,
 )
-from highlight_images import ensure_highlight_image
+from highlight_images import ensure_highlight_image, _normalize_body
 
 
 MYINPUT = sys.argv[1].casefold()
@@ -65,6 +66,16 @@ MYINPUT = sys.argv[1].casefold()
 # `--tag` (optionally with trailing whitespace) but has not started typing a
 # tag name yet. Used to swap "no results" for a list of available tags.
 _BARE_TAG_RE = re.compile(r'(?:^|\s)--tag\s*$')
+
+# Matches a `--tag` filter with a value, accepting either form:
+#   --tag sci-fi              (single-word tag, unchanged)
+#   --tag (home improvement)  (multi-word tag, parenthesized)
+# The separator after `--tag` can be whitespace, ':' or '=' (the last two
+# are preserved as legacy shorthand, e.g. `--tag:fiction`). The multi-word
+# form comes from the autocomplete dropdown wrapping tags that contain a
+# space, following the same pattern used in the AlfreDo workflow —
+# otherwise Alfred's space-tokenized query breaks the tag name apart.
+_TAG_FILTER_RE = re.compile(r'--tag[:=\s]+(?:\(([^)]+)\)|(\S+))')
 
 # Matches the --highlights operator anywhere in the query. The tail (anything
 # after the token) is taken as a free-text search against highlight passages
@@ -183,11 +194,16 @@ def build_tag_suggestions_response(books, search_string):
 	for tag_name, count in sorted(
 		tag_counts.items(), key=lambda kv: (-kv[1], kv[0].lower())
 	):
+		# Multi-word tags (e.g. "Home Improvement", "Want to Read") have
+		# to travel through Alfred's query string as a single token, so
+		# we wrap them in parentheses. The `--tag` parser below unwraps
+		# them. Same convention as the AlfreDo workflow.
+		tag_token = f"({tag_name})" if " " in tag_name else tag_name
 		items.append({
 			"title": f"🏷️ {tag_name}",
 			"subtitle": f"{count} book{'s' if count != 1 else ''} tagged '{tag_name}'",
-			"autocomplete": f"{prefix_autocomplete}--tag {tag_name} ",
-			"arg": f"--tag {tag_name}",
+			"autocomplete": f"{prefix_autocomplete}--tag {tag_token} ",
+			"arg": f"--tag {tag_token}",
 			"valid": False,
 			"icon": {"path": "icon.png"},
 		})
@@ -209,44 +225,28 @@ def _join_fragment_parts(*parts):
 	return "  ·  ".join(cleaned)
 
 
-def _format_highlight_for_text(h, include_location=True):
-	"""
-	Render one Highlight as a compact plain-text block for use in
-	Alfred's Large Type overlay (⌘L) or clipboard copy (⌘C).
-	"""
-	parts = []
-	header_bits = []
-	if h.style and h.style != "highlight":
-		header_bits.append(h.style.upper())
-	if include_location and h.location:
-		header_bits.append(h.location[:80])
-	if h.created:
-		header_bits.append(h.created)
-	if header_bits:
-		parts.append("[" + " · ".join(header_bits) + "]")
-	if h.text:
-		parts.append(h.text)
-	elif h.source == "Kindle":
-		parts.append("(Kindle highlight — text not stored locally)")
-	if h.note:
-		parts.append(f"— note: {h.note}")
-	return "\n".join(parts)
+# Max length of a highlight title as shown in Alfred's main row. The full
+# passage is always available in the QuickLook card (⇧ / Y) and in the
+# downstream text view, so the Alfred row only needs a short, scannable
+# preview — anything longer gets truncated with an ellipsis.
+_HIGHLIGHT_TITLE_MAX = 100
 
 
-def _highlights_text_blob(highlights_for_book, book=None):
-	"""Join formatted highlights into a single text blob with a header."""
-	lines = []
-	if book is not None:
-		lines.append(f"{book.title}")
-		if book.author:
-			lines.append(f"by {book.author}")
-		lines.append(f"({book.source})")
-		lines.append("")
-	for i, h in enumerate(highlights_for_book, start=1):
-		lines.append(f"— {i} —")
-		lines.append(_format_highlight_for_text(h))
-		lines.append("")
-	return "\n".join(lines).rstrip()
+def _flatten_for_title(text):
+	"""
+	Collapse all whitespace (incl. embedded `\\n` / `\\t` / repeated
+	spaces) to single spaces and trim to `_HIGHLIGHT_TITLE_MAX` chars
+	with a trailing ellipsis. Alfred renders item titles on a single
+	line and cuts at the first `\\n`, so raw highlight text — which
+	often carries the source's on-screen line breaks — appears
+	unexpectedly short without this.
+	"""
+	if not text:
+		return ""
+	flat = " ".join(str(text).split())
+	if len(flat) > _HIGHLIGHT_TITLE_MAX:
+		flat = flat[:_HIGHLIGHT_TITLE_MAX - 1].rstrip() + "…"
+	return flat
 
 
 def build_book_highlights_response(all_highlights, books, source, book_id, tail):
@@ -259,8 +259,8 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 	box and is used as a case-insensitive substring filter over passage + note.
 
 	Shows each highlight as its own Alfred row, with the full passage text as
-	the item's title, and populates `text.largetype` / `text.copy` so ⌘L / ⌘C
-	reveal / copy the passage.
+	the item's title. The row's `quicklookurl` exposes a typeset highlight
+	card so ⇧ / Y previews the passage in Alfred's QuickLook overlay.
 	"""
 	op_source = (source or "").strip().lower()
 	op_book_id = (book_id or "").strip()
@@ -304,8 +304,7 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 
 	items = []
 
-	# Header row with book metadata + counts. Holds the full-text blob in
-	# `text.largetype` so ⌘L on the header shows ALL highlights at once.
+	# Header row with book metadata + counts.
 	if target_book is not None:
 		header_title = f"💬 {len(book_highlights)} – {target_book.title}"
 		header_subtitle_bits = []
@@ -314,9 +313,8 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 		header_subtitle_bits.append(f"📚 {target_book.source}")
 		if tail:
 			header_subtitle_bits.append(f"filter: '{tail}'")
-		header_subtitle_bits.append("↩ open book · ⌘L all highlights · ⌘C copy all")
+		header_subtitle_bits.append("↩ open book")
 
-		all_text = _highlights_text_blob(book_highlights, target_book)
 		header_arg = _book_open_arg(target_book)
 
 		items.append({
@@ -325,10 +323,6 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 			"valid": bool(header_arg),
 			"arg": header_arg,
 			"icon": {"path": target_book.icon_path or "icon.png"},
-			"text": {
-				"copy": all_text or "(no highlight text available)",
-				"largetype": all_text or "(no highlight text available)",
-			},
 			"variables": {
 				"action": "open_book",
 			},
@@ -366,11 +360,11 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 	icon_path = (target_book.icon_path if target_book else "") or "icon.png"
 	book_title = target_book.title if target_book else op_book_id
 	for idx, h in enumerate(book_highlights, start=1):
-		title_line = h.display_text
-		# Alfred row titles are truncated by the UI around ~120 chars, but the
-		# full text stays available via ⌘L (largetype) and ⌘C (copy).
-		if len(title_line) > 150:
-			title_line = title_line[:147] + "…"
+		# Flatten embedded newlines (Alfred cuts titles at the first
+		# `\n`) and cap at a short preview length. The full passage is
+		# always visible in the QuickLook card (⇧ / Y) and in the
+		# downstream text view.
+		title_line = _flatten_for_title(h.display_text)
 
 		# Subtitle starts with the book title so the user can always see
 		# which book they're inside (handy if they leave the drill-down
@@ -388,9 +382,6 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 		if h.created:
 			subtitle_bits.append(h.created)
 
-		copy_body = h.text or h.note or ""
-		large_body = _format_highlight_for_text(h)
-
 		# ↩ on a highlight row now flags `action = show_highlight` in the
 		# Alfred variable stream so downstream graph nodes (e.g. a Large
 		# Type / text-window output connected after the drill-down script
@@ -399,14 +390,20 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 		# verbatim. Notes are appended if no passage text exists (e.g.
 		# Kindle highlights where only the user note is stored locally).
 		# Opening the book stays available via ⌘↩ (see `mods.cmd` below).
+		#
+		# The passage is run through `_normalize_body()` so hard line
+		# breaks baked into the source annotation (iBooks/Calibre copy
+		# over the on-screen wrapping) don't show up as ragged breaks
+		# in the downstream text view. Genuine paragraph breaks are
+		# preserved.
 		if h.text:
-			show_body = h.text
+			show_body = _normalize_body(h.text)
 			if h.note:
-				show_body = f"{h.text}\n\n— note: {h.note}"
+				show_body = f"{show_body}\n\n— note: {_normalize_body(h.note)}"
 		elif h.note:
-			show_body = h.note
+			show_body = _normalize_body(h.note)
 		else:
-			show_body = copy_body or title_line
+			show_body = title_line
 
 		# Pre-render a QuickLook JPG for this highlight, matching the
 		# pattern used by the alfred-readwise workflow. Generation is
@@ -435,10 +432,6 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 				# be empty (some Kindle rows have no location; some
 				# highlights lack a created date).
 				"fragment_id": _join_fragment_parts(h.location, h.created),
-			},
-			"text": {
-				"copy": copy_body,
-				"largetype": large_body,
 			},
 		}
 		if quicklook_path:
@@ -527,8 +520,11 @@ def _resolve_searchable_epub(book):
 	             string on success.
 
 	We gate ⌘↩ on highlight rows with this so that Kindle URLs, iBooks
-	deep-links, Yomu tokens, or books with only a cloud copy don't fall
-	through to `searchEPUB.py` and surface its generic format warning.
+	deep-links, or books with only a cloud copy don't fall through to
+	`searchEPUB.py` and surface its generic format warning. Yomu books
+	*are* searchable: their unpacked EPUB bundle lives on disk under
+	`YOMU_EPUB_CACHE_DIR`, and searchEPUB.py knows how to resolve the
+	`yomu-open|…` token to that bundle.
 	"""
 	if book is None:
 		return "", "book not found in the library cache"
@@ -537,13 +533,30 @@ def _resolve_searchable_epub(book):
 	if not raw:
 		return "", "no local file path recorded for this book"
 
+	if raw.startswith("yomu-open|"):
+		# yomu-open|<meta_ident>|<identifier>|<file_ident>  — the
+		# third segment is the cache folder name. Yomu populates the
+		# bundle lazily the first time the user opens the book, so if
+		# the folder is missing we tell the user *why*, not a generic
+		# format error.
+		parts = raw.split("|")
+		identifier = parts[2].strip() if len(parts) > 2 else ""
+		if not identifier:
+			return "", "Yomu book is missing its identifier"
+		bundle_dir = os.path.join(YOMU_EPUB_CACHE_DIR, identifier)
+		if not os.path.isdir(bundle_dir):
+			return "", "open the book in Yomu once so it caches the EPUB"
+		if not os.path.isfile(os.path.join(bundle_dir, "META-INF", "container.xml")):
+			return "", "Yomu's EPUB cache for this book is incomplete"
+		return raw, ""
+
 	candidate = raw
 	if candidate.startswith("calibre-open|"):
 		# `calibre-open|/abs/path.epub[|location]`
 		candidate = candidate[len("calibre-open|"):].split("|", 1)[0]
-	elif "://" in candidate or candidate.startswith(("http:", "https:", "ibooks:", "kindle-lassen-open|", "yomu-open|")):
-		# URL-style paths (Kindle cloud, iBooks deep-link, Yomu/Kindle
-		# Lassen tokens) are not files on disk.
+	elif "://" in candidate or candidate.startswith(("http:", "https:", "ibooks:", "kindle-lassen-open|")):
+		# URL-style paths (Kindle cloud, iBooks deep-link, Kindle
+		# Lassen token) are not files on disk.
 		return "", f"{book.source or 'this'} books aren't searchable locally"
 
 	expanded = os.path.expanduser(candidate)
@@ -684,10 +697,10 @@ def build_highlights_response(highlights, books, search_string):
 		author = b.author if b else ""
 		icon_path = (b.icon_path if b else "") or "icon.png"
 
-		title_line = h.display_text
-		# Keep the Alfred row readable; long blocks overflow.
-		if len(title_line) > 140:
-			title_line = title_line[:137] + "…"
+		# Flatten embedded newlines (Alfred cuts titles at the first
+		# `\n`) and cap to a short preview; the full passage is in the
+		# QuickLook card / downstream text view.
+		title_line = _flatten_for_title(h.display_text)
 
 		subtitle_bits = [f"{idx}/{len(matches):,}", f"📖 {book_title}"]
 		if author:
@@ -724,8 +737,10 @@ def build_highlights_response(highlights, books, search_string):
 			item["quicklookurl"] = quicklook_path
 		# cmd+enter copies the highlight text to the clipboard (Alfred shows
 		# the subtitle text of the mod block). Handy for quoting passages.
+		# Normalize first so hard wraps from the source annotation don't
+		# survive the paste into a notes app.
 		if h.text or h.note:
-			copy_body = h.text or h.note
+			copy_body = _normalize_body(h.text or h.note)
 			item["mods"] = {
 				"cmd": {
 					"valid": True,
@@ -768,16 +783,18 @@ def search_books(books, search_string):
 		search_string = search_string.replace('--read', '')
 		books = [book for book in books if book.read_pct == '100.0%']
 
-	# Narrow by tag name, e.g. "--tag sci-fi" or "--tag:Durant". Matches are
-	# substring, case-insensitive, against any individual tag on the book.
-	tag_filters = re.findall(r'--tag[:=\s]+([^\s]+)', search_string)
-	for tag_filter in tag_filters:
-		search_string = re.sub(
-			r'--tag[:=\s]+' + re.escape(tag_filter),
-			'',
-			search_string,
-			count=1,
-		)
+	# Narrow by tag name, e.g. `--tag sci-fi`, `--tag:Durant`, or — for
+	# multi-word tags coming from the autocomplete dropdown —
+	# `--tag (home improvement)`. Matches are substring, case-insensitive,
+	# against any individual tag on the book. We strip each matched token
+	# out of `search_string` as we go so the remaining words fall through
+	# to the free-text title/author search.
+	tag_filters = []
+	def _consume_tag(match):
+		tag_filters.append((match.group(1) or match.group(2) or "").strip())
+		return ''
+	search_string = _TAG_FILTER_RE.sub(_consume_tag, search_string)
+	tag_filters = [t for t in tag_filters if t]
 	if tag_filters:
 		needles = [t.lower() for t in tag_filters]
 		books = [
@@ -914,22 +931,13 @@ def serveBooks(books, result):
 		# even for books with zero highlights, because without it Alfred
 		# falls back to the row's default `arg` (e.g. `yomu-open|…`) and
 		# that token ends up pre-filled in the drill-down search box.
-		# ⌘L / ⌘C are attached separately only when there's something
-		# substantive to copy/display.
 		book_hls = getattr(myBook, "_highlights", []) or []
-		if book_hls:
-			all_text = _highlights_text_blob(book_hls, myBook)
-			item["text"] = {
-				"copy": all_text,
-				"largetype": all_text,
-			}
 
 		if myBook.bookID:
 			if book_hls:
 				alt_subtitle = (
 					f"⌥↩ List {len(book_hls)} highlight"
 					f"{'s' if len(book_hls) != 1 else ''} one-per-row"
-					f"  ·  ⌘L large type  ·  ⌘C copy all"
 				)
 			else:
 				alt_subtitle = "⌥↩ No highlights captured for this book yet"
@@ -1073,8 +1081,8 @@ def main():
 
 	# Load highlights and project per-book counts back onto the Book objects
 	# so the UI can show a 💬 N chip without a second lookup. We also stash
-	# the per-book highlight list on each Book (as a transient attribute) so
-	# serveBooks() can fill text.largetype / text.copy for ⌘L / ⌘C.
+	# the per-book highlight list on each Book (as a transient attribute)
+	# for any downstream consumer that needs it on the book row.
 	all_highlights = _load_all_highlights()
 	hl_by_book = {}
 	for h in all_highlights:

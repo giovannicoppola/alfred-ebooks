@@ -174,7 +174,7 @@
 			<key>config</key>
 			<dict>
 				<key>behaviour</key>
-				<integer>0</integer>
+				<integer>2</integer>
 				<key>fontmode</key>
 				<integer>0</integer>
 				<key>fontsizing</key>
@@ -344,59 +344,6 @@ fi</string>
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>concurrently</key>
-				<false/>
-				<key>escaping</key>
-				<integer>68</integer>
-				<key>script</key>
-				<string>on run argv
-
-tell application "System Events"
-	tell process "Books"
-		-- Give Books a moment to settle its window state
-		delay 0.5
-
-		repeat with w in windows
-			try
-				set wName to name of w as text
-				set roleDesc to role description of w
-
-				-- Only close the main library window
-				if wName is "All" or roleDesc is "main window" then
-					if (exists button 1 of w) then
-						click button 1 of w
-						do shell script "echo Closed library window (" &amp; quoted form of wName &amp; ") 1&gt;&amp;2"
-					end if
-				else
-					do shell script "echo Skipped window: " &amp; quoted form of wName &amp; " [" &amp; roleDesc &amp; "] 1&gt;&amp;2"
-				end if
-
-			on error errMsg
-				do shell script "echo Error: " &amp; quoted form of errMsg &amp; " 1&gt;&amp;2"
-			end try
-		end repeat
-	end tell
-end tell
-
-
-end run</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>type</key>
-				<integer>6</integer>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.action.script</string>
-			<key>uid</key>
-			<string>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</string>
-			<key>version</key>
-			<integer>2</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>alfredfiltersresults</key>
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
@@ -501,57 +448,6 @@ end run</string>
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>alfredfiltersresults</key>
-				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<true/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>2</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string>{var:refreshkeyword}</string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
-				<true/>
-				<key>queuedelaymode</key>
-				<integer>0</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string>⏳...please wait while I refresh...</string>
-				<key>script</key>
-				<string>export PYTHONPATH="$PWD/lib"
-/usr/bin/python3 library-rebuild.py
-</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string></string>
-				<key>title</key>
-				<string>refresh library database 👀</string>
-				<key>type</key>
-				<integer>5</integer>
-				<key>withspace</key>
-				<false/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
-			<key>uid</key>
-			<string>C4CF391F-F6A5-48BE-B5D0-B018D1393DA7</string>
-			<key>version</key>
-			<integer>3</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>argument</key>
 				<string></string>
 				<key>passthroughargument</key>
@@ -618,45 +514,6 @@ end run</string>
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>argument</key>
-				<string></string>
-				<key>passthroughargument</key>
-				<false/>
-				<key>variables</key>
-				<dict>
-					<key>curr_book</key>
-					<string>{query}</string>
-				</dict>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.argument</string>
-			<key>uid</key>
-			<string>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>externaltriggerid</key>
-				<string>mainSearch</string>
-				<key>passinputasargument</key>
-				<true/>
-				<key>passvariables</key>
-				<true/>
-				<key>workflowbundleid</key>
-				<string>self</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.callexternaltrigger</string>
-			<key>uid</key>
-			<string>5330E514-8491-49F5-98D8-DED98E264BC1</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>alfredfiltersresults</key>
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
@@ -713,6 +570,96 @@ end run</string>
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>2</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>{var:refreshkeyword}</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>⏳...please wait while I refresh...</string>
+				<key>script</key>
+				<string>export PYTHONPATH="$PWD/lib"
+/usr/bin/python3 library-rebuild.py
+</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string>refresh library database 👀</string>
+				<key>type</key>
+				<integer>5</integer>
+				<key>withspace</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>C4CF391F-F6A5-48BE-B5D0-B018D1393DA7</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>argument</key>
+				<string></string>
+				<key>passthroughargument</key>
+				<false/>
+				<key>variables</key>
+				<dict>
+					<key>curr_book</key>
+					<string>{query}</string>
+				</dict>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.utility.argument</string>
+			<key>uid</key>
+			<string>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>mainSearch</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>5330E514-8491-49F5-98D8-DED98E264BC1</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>externaltriggerid</key>
 				<string>main_query</string>
 				<key>passinputasargument</key>
@@ -728,6 +675,59 @@ end run</string>
 			<string>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</string>
 			<key>version</key>
 			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>concurrently</key>
+				<false/>
+				<key>escaping</key>
+				<integer>68</integer>
+				<key>script</key>
+				<string>on run argv
+
+tell application "System Events"
+	tell process "Books"
+		-- Give Books a moment to settle its window state
+		delay 0.5
+
+		repeat with w in windows
+			try
+				set wName to name of w as text
+				set roleDesc to role description of w
+
+				-- Only close the main library window
+				if wName is "All" or roleDesc is "main window" then
+					if (exists button 1 of w) then
+						click button 1 of w
+						do shell script "echo Closed library window (" &amp; quoted form of wName &amp; ") 1&gt;&amp;2"
+					end if
+				else
+					do shell script "echo Skipped window: " &amp; quoted form of wName &amp; " [" &amp; roleDesc &amp; "] 1&gt;&amp;2"
+				end if
+
+			on error errMsg
+				do shell script "echo Error: " &amp; quoted form of errMsg &amp; " 1&gt;&amp;2"
+			end try
+		end repeat
+	end tell
+end tell
+
+
+end run</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>type</key>
+				<integer>6</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.script</string>
+			<key>uid</key>
+			<string>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</string>
+			<key>version</key>
+			<integer>2</integer>
 		</dict>
 	</array>
 	<key>readme</key>
@@ -786,7 +786,7 @@ List, open, and search your eBooks ebooks with Alfred
 
 - **Opening a specific book in the new Kindle for Mac app (Lassen) is hacky and fragile.** Lassen exposes no way to deep-link to a book from outside: no supported URL scheme opens a book, there's no AppleScript dictionary, and Catalyst hides the view hierarchy from the Accessibility API so covers can't be targeted by AX role/label. ↩️ works around this by **driving the UI as if a human were doing it** — moving the mouse, clicking, typing — which is inherently brittle and will likely break on Kindle UI updates, layout changes, or anything that perturbs timing. The sequence: Kindle is foregrounded, the AX tree is walked to detect library vs reader view, the script slides the cursor into the auto-hiding top toolbar and clicks the back-arrow if needed, the search text field is clicked at its AX-reported center to focus it (Cmd+F is unreliable across library sub-states), the existing query is cleared, the book title is typed, Return filters the library, and a Quartz-posted double-click on the first grid cell opens it. This requires granting **Accessibility permission to Alfred** in *System Settings → Privacy &amp; Security → Accessibility*. The back-arrow click position and the book-cell double-click position are layout-dependent heuristics; tweak them in `kindle-lassen-open.sh` if they miss on your setup.
 - I could not figure out how the Kindle app can tell if a book was first loaned, then purchased. Currently, if that is the case (i.e. a book was first loaned, then purchased), the book will appear as loaned.
-- Full-text book search currently supports EPUB content. Non-EPUB formats (for example MOBI/AZW3/PDF) can be listed/opened, but search-inside-book is EPUB-only.
+- Full-text book search only works on **DRM-free EPUBs** (also called "unencrypted" or "open" EPUBs). Amazon Kindle books are proprietary AZW3/KFX and always DRM-protected; Apple Books purchased from the iBooks Store are typically wrapped in FairPlay DRM. Those can still be listed, opened, and have their highlights surfaced — but `ebooklib` cannot parse the encrypted container, so search-inside-book and the EPUB report generator skip them. In practice the searchable pool is: Calibre library EPUBs, Yomu EPUBs, and any EPUBs you sideloaded into Apple Books or Calibre yourself. MOBI / AZW3 / PDF are unsupported regardless of DRM status.
 - For Calibre match opens, EPUBs are reflowable, so jumping is chapter/locator based rather than fixed "page number" precise.
 - not tested thoroughly for user-uploaded documents.
 
@@ -811,102 +811,102 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		<key>04664B4B-E922-48E7-9DC8-492207C157B8</key>
 		<dict>
 			<key>xpos</key>
-			<real>655</real>
+			<real>690</real>
 			<key>ypos</key>
-			<real>40</real>
+			<real>60</real>
 		</dict>
 		<key>24764E8D-FF48-42E7-9B54-E9D177080FA5</key>
 		<dict>
 			<key>xpos</key>
-			<real>930</real>
+			<real>680</real>
 			<key>ypos</key>
-			<real>480</real>
+			<real>350</real>
 		</dict>
 		<key>28939AD5-7FDB-44B4-87C5-BFCA352716C7</key>
 		<dict>
 			<key>xpos</key>
-			<real>1325</real>
+			<real>1145</real>
 			<key>ypos</key>
-			<real>15</real>
+			<real>35</real>
 		</dict>
 		<key>487CE6DD-5966-4E3E-9D67-EF1D60023887</key>
 		<dict>
 			<key>xpos</key>
-			<real>825</real>
+			<real>545</real>
 			<key>ypos</key>
-			<real>360</real>
+			<real>280</real>
 		</dict>
 		<key>5330E514-8491-49F5-98D8-DED98E264BC1</key>
 		<dict>
 			<key>xpos</key>
-			<real>1570</real>
+			<real>1390</real>
 			<key>ypos</key>
-			<real>460</real>
+			<real>480</real>
 		</dict>
 		<key>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</key>
 		<dict>
 			<key>xpos</key>
-			<real>695</real>
+			<real>515</real>
 			<key>ypos</key>
-			<real>615</real>
+			<real>635</real>
 		</dict>
 		<key>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</key>
 		<dict>
 			<key>note</key>
 			<string>script to close the 'All' window after opening the book, but it works inconsistently</string>
 			<key>xpos</key>
-			<real>975</real>
+			<real>1665</real>
 			<key>ypos</key>
-			<real>110</real>
+			<real>705</real>
 		</dict>
 		<key>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</key>
 		<dict>
 			<key>xpos</key>
-			<real>1205</real>
+			<real>1045</real>
 			<key>ypos</key>
-			<real>380</real>
+			<real>315</real>
 		</dict>
 		<key>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</key>
 		<dict>
 			<key>xpos</key>
-			<real>1355</real>
+			<real>1175</real>
 			<key>ypos</key>
-			<real>400</real>
+			<real>420</real>
 		</dict>
 		<key>BA9E997F-E08E-4947-BBB4-8BF84341ED1D</key>
 		<dict>
 			<key>xpos</key>
-			<real>210</real>
+			<real>30</real>
 			<key>ypos</key>
-			<real>115</real>
+			<real>135</real>
 		</dict>
 		<key>C201E860-5900-49B2-8980-4B8E5DA0A4C8</key>
 		<dict>
 			<key>xpos</key>
-			<real>815</real>
+			<real>920</real>
 			<key>ypos</key>
-			<real>90</real>
+			<real>100</real>
 		</dict>
 		<key>C4CF391F-F6A5-48BE-B5D0-B018D1393DA7</key>
 		<dict>
 			<key>xpos</key>
-			<real>460</real>
+			<real>280</real>
 			<key>ypos</key>
-			<real>330</real>
+			<real>350</real>
 		</dict>
 		<key>C9F9AE76-99B2-4432-91CD-AF8D39A92E25</key>
 		<dict>
 			<key>xpos</key>
-			<real>1365</real>
+			<real>1185</real>
 			<key>ypos</key>
-			<real>210</real>
+			<real>230</real>
 		</dict>
 		<key>EFFEB21A-8303-4FE0-8B9D-0302BE4E21EA</key>
 		<dict>
 			<key>xpos</key>
-			<real>460</real>
+			<real>280</real>
 			<key>ypos</key>
-			<real>115</real>
+			<real>135</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>
@@ -1030,6 +1030,48 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<string>popupbutton</string>
 			<key>variable</key>
 			<string>SEARCH_SCOPE</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>10</string>
+				<key>placeholder</key>
+				<string>10</string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>When searching inside a book, how many words of context to show around each match.</string>
+			<key>label</key>
+			<string>Search context words</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>SEARCH_CONTEXT_WORDS</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>100</string>
+				<key>placeholder</key>
+				<string>100</string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>For 2-word in-book searches, max word distance between the two terms (25 ≈ same paragraph, 100 ≈ same section, 200 ≈ same chapter).</string>
+			<key>label</key>
+			<string>Search proximity words</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>SEARCH_PROXIMITY_WORDS</string>
 		</dict>
 		<dict>
 			<key>config</key>

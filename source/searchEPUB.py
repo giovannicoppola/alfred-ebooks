@@ -116,6 +116,19 @@ from bs4 import BeautifulSoup
 from docopt import docopt
 from ebooklib import epub
 
+# Yomu keeps each book as an unpacked EPUB bundle inside its sandbox.
+# We resolve `yomu-open|…` tokens against this directory. Importing from
+# config keeps the path override (`YOMU_EPUB_CACHE_DIR` env var, sandbox
+# ID override) in one place; falling back keeps searchEPUB.py runnable
+# on its own for ad-hoc CLI use without the Alfred workflow.
+try:
+    from config import YOMU_EPUB_CACHE_DIR
+except Exception:
+    YOMU_EPUB_CACHE_DIR = os.path.expanduser(
+        "~/Library/Containers/net.cecinestpasparis.yomu"
+        "/Data/Library/Caches/EBook/EPub"
+    )
+
 # Default settings
 DEFAULT_EPUB_FOLDER = "~/Library/Containers/com.apple.BKAgentService/Data/Documents/iBooks/Books"
 DEFAULT_EPUB_FOLDER = "~/Library/Mobile Documents/iCloud~com~apple~iBooks/Documents/"
@@ -322,8 +335,11 @@ def search_multiple_epubs(
                     if not chapter_title:
                         chapter_title = file_name
 
-                    # Get plain text for searching
-                    text_content = soup.get_text()
+                    # Plain text for searching, with block-level breaks
+                    # preserved so the excerpt carries paragraph /
+                    # heading boundaries instead of welding them into
+                    # one stream.
+                    text_content = _html_to_block_text(soup)
 
                     # Check if this is a 2-word proximity search
                     if is_proximity_search(search_text):
@@ -354,68 +370,42 @@ def search_multiple_epubs(
                             re.finditer(re.escape(search_text), text_content, re.IGNORECASE)
                         )
 
-                    # Split text into words for context extraction  
-                    words = re.findall(r"\b\w+\b", text_content)
-
                     if matches:
                         # For each match, extract context and create markdown
                         for match in matches:
                             # Create a unique ID for this match
                             match_id = f"match_{uuid.uuid4().hex[:8]}"
 
-                            # Find the word position of this match
-                            match_pos = len(
-                                re.findall(r"\b\w+\b", text_content[: match.start()])
+                            # Slice `text_content` verbatim around the
+                            # match so block-level paragraph breaks
+                            # survive into the excerpt. Leading/
+                            # trailing whitespace is trimmed so the
+                            # excerpt doesn't start or end on a stray
+                            # newline.
+                            slice_start, slice_end = _context_slice(
+                                text_content, match.start(), match.end(), context_words
                             )
+                            raw_context = text_content[slice_start:slice_end]
+                            lstripped = raw_context.lstrip()
+                            lead_trim = len(raw_context) - len(lstripped)
+                            raw_context = lstripped.rstrip()
+                            match_offset = match.start() - slice_start - lead_trim
+                            match_len = match.end() - match.start()
 
-                            # Get surrounding words
-                            start_word = max(0, match_pos - context_words)
-                            end_word = min(
-                                len(words),
-                                match_pos + context_words + len(search_text.split()),
+                            # `context` and `markdown_context` both
+                            # keep paragraph breaks now; only the
+                            # Alfred-item subtitle builder collapses
+                            # them for the single-line row. Blockquote
+                            # bullets in markdown_string still render
+                            # correctly when the body carries \n\n.
+                            context = raw_context
+                            markdown_context = (
+                                raw_context[:match_offset]
+                                + "**"
+                                + raw_context[match_offset:match_offset + match_len]
+                                + "**"
+                                + raw_context[match_offset + match_len:]
                             )
-
-                            # Get the context as a string
-                            if start_word < match_pos and end_word > match_pos:
-                                context_before = " ".join(words[start_word:match_pos])
-                                match_words = " ".join(
-                                    words[
-                                        match_pos : match_pos + len(search_text.split())
-                                    ]
-                                )
-                                context_after = " ".join(
-                                    words[
-                                        match_pos + len(search_text.split()) : end_word
-                                    ]
-                                )
-                                context = (
-                                    f"{context_before} {match_words} {context_after}"
-                                )
-
-                                # Create markdown version with bold search text
-                                markdown_context = f"{context_before} **{match_words}** {context_after}"
-                            else:
-                                # Fallback if word-based context fails
-                                start = max(0, match.start() - 100)
-                                end = min(len(text_content), match.end() + 100)
-                                context = (
-                                    text_content[start : match.start()]
-                                    + text_content[match.start() : match.end()]
-                                    + text_content[match.end() : end]
-                                )
-
-                                # Create markdown version with bold search text
-                                markdown_context = (
-                                    text_content[start : match.start()]
-                                    + f"**{text_content[match.start():match.end()]}**"
-                                    + text_content[match.end() : end]
-                                )
-
-                            # Clean up the context (remove extra whitespace, newlines)
-                            context = re.sub(r"\s+", " ", context).strip()
-                            markdown_context = re.sub(
-                                r"\s+", " ", markdown_context
-                            ).strip()
 
                             # Generate clean markdown string with book title
                             markdown_string = f"> {markdown_context}\n\n— *{book_title}, {chapter_title}*"
@@ -666,8 +656,15 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
     for book_index, (book_title, book_results) in enumerate(books.items(), 1):
         match_count = len(book_results)
         total_books = len(books)
-        # Get a sample context from first match
-        sample_context = book_results[0].get('context', '').replace('**', '').strip()
+        # Sample context for the Alfred subtitle. Result contexts now
+        # carry paragraph breaks (see `_html_to_block_text` in the
+        # search routine), which Alfred renders as literal \n in
+        # subtitles — so collapse every whitespace run to a single
+        # space purely for the row preview. The untouched multi-line
+        # `context` is still shipped through as a workflow variable.
+        sample_context = re.sub(
+            r"\s+", " ", book_results[0].get('context', '').replace('**', '')
+        ).strip()
         if len(sample_context) > 60:
             sample_context = sample_context[:57] + "..."
         
@@ -773,7 +770,15 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
             # Individual match entries (limit to prevent overwhelming Alfred)
             for i, result in enumerate(book_results[:10]):  # Show max 10 matches per book
                 chapter = result.get('chapter', 'Unknown Chapter')
-                context = result.get('context', '').replace('**', '').strip()
+                # Subtitle version: strip bold markers AND collapse
+                # every whitespace run to a single space so paragraph
+                # breaks in the excerpt don't truncate the subtitle at
+                # the first \n. The untouched multi-line `context`
+                # still flows downstream via the `context` / `markdown`
+                # workflow variables for the text/markdown view.
+                context = re.sub(
+                    r"\s+", " ", result.get('context', '').replace('**', '')
+                ).strip()
                 
                 # Use progressive numbering if chapter info is not informative
                 # Check for various uninformative patterns
@@ -985,8 +990,10 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
                     chapter_title.get_text() if chapter_title else item.get_name()
                 )
                 
-                # Get plain text for searching
-                text_content = soup.get_text()
+                # Plain text for searching, with block-level breaks
+                # preserved so the excerpt carries paragraph/heading
+                # boundaries instead of welding them into one stream.
+                text_content = _html_to_block_text(soup)
                 
                 # Check if this is a 2-word proximity search
                 if is_proximity_search(search_text):
@@ -1017,36 +1024,39 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
                         re.finditer(re.escape(search_text), text_content, re.IGNORECASE)
                     )
                 
-                # Split text into words for context extraction
-                words = re.findall(r"\b\w+\b", text_content)
-                
                 # Process each match
                 for match in matches:
-                    # Find the word positions around the match
                     match_start = match.start()
                     match_end = match.end()
-                    
-                    # Find word boundaries around the match
-                    words_before_match = re.findall(
-                        r"\b\w+\b", text_content[:match_start]
+
+                    # Slice the original text verbatim between word
+                    # anchors so paragraph breaks from block-level
+                    # elements survive into the excerpt. Trimming
+                    # leading/trailing whitespace keeps the excerpt
+                    # from starting or ending on a stray newline.
+                    slice_start, slice_end = _context_slice(
+                        text_content, match_start, match_end, context_words
                     )
-                    words_after_match = re.findall(
-                        r"\b\w+\b", text_content[match_end:]
-                    )
-                    
-                    # Get context words
-                    context_before = words_before_match[-context_words:] if words_before_match else []
-                    context_after = words_after_match[:context_words] if words_after_match else []
-                    
-                    # Create context string
+                    raw_context = text_content[slice_start:slice_end]
+                    lstripped = raw_context.lstrip()
+                    lead_trim = len(raw_context) - len(lstripped)
+                    raw_context = lstripped.rstrip()
+                    match_offset = match_start - slice_start - lead_trim
+                    match_len = match_end - match_start
+
+                    # Both `context` and `markdown` carry `**match**`
+                    # bold markers — the downstream Alfred item
+                    # builder strips them for the subtitle and keeps
+                    # them for the markdown/text view, matching the
+                    # pre-existing contract.
                     context_text = (
-                        " ".join(context_before)
-                        + " **"
-                        + match.group()
-                        + "** "
-                        + " ".join(context_after)
+                        raw_context[:match_offset]
+                        + "**"
+                        + raw_context[match_offset:match_offset + match_len]
+                        + "**"
+                        + raw_context[match_offset + match_len:]
                     )
-                    
+
                     # Markdown body is just the bolded excerpt — the
                     # "found in *chapter*" header used to sit on top here
                     # but duplicated info already shown in the Alfred row
@@ -1222,6 +1232,115 @@ def get_book_title_from_path(epub_path):
     return os.path.splitext(os.path.basename(epub_path))[0]
 
 
+# Block-level HTML elements that should end with a paragraph break
+# when we flatten an EPUB chapter to plain text for search-result
+# context. Kept module-level so both the single-book and multi-book
+# search paths use the exact same boundary definition.
+_BLOCK_LEVEL_TAGS = (
+    "p", "div", "section", "article",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "li", "blockquote", "pre", "tr",
+)
+
+
+def _html_to_block_text(soup):
+    """
+    Flatten an HTML soup to plain text while preserving block-level
+    structure. Two reasons we can't just call `soup.get_text()`:
+      1. With no separator it welds every text node together with zero
+         whitespace, so a chapter like `<h2>Chapter VI</h2><h3>Byzantine
+         Civilization</h3>…<p>BYZANTINE economy…</p>` collapses to
+         "Chapter VIByzantine Civilization…BYZANTINE economy…".
+      2. With `separator=…` it inserts the separator between *every*
+         text-node boundary, including the ones inside inline runs like
+         `<p>This is <b>bold</b> text.</p>`, so paragraphs fracture
+         mid-sentence.
+    The workaround: append `\n\n` inside each block-level element (so
+    it follows that element's content in document order) and convert
+    `<br>` to `\n`. Result: real paragraph breaks between block
+    siblings, no spurious breaks inside inline runs.
+    """
+    for br in soup.find_all("br"):
+        br.replace_with("\n")
+    for block in soup.find_all(_BLOCK_LEVEL_TAGS):
+        block.append("\n\n")
+    text = soup.get_text()
+    # Collapse runs of 3+ newlines to exactly 2 — nested block elements
+    # (e.g. a <div> wrapping an <h2> wrapping inline text) each
+    # contribute a `\n\n`, which stacks into ragged blank-line
+    # sequences. Normalising keeps the standard markdown
+    # paragraph-break spacing without losing the breaks themselves.
+    # Also trim trailing whitespace on each line so stray spaces from
+    # inline whitespace in the source HTML don't show up as hard-to-
+    # see trailing spaces in the downstream text view.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    return text
+
+
+def _context_slice(text, match_start, match_end, context_words):
+    """
+    Return `(slice_start, slice_end)` such that `text[slice_start:
+    slice_end]` includes `context_words` whole words before the match
+    and `context_words` whole words after, while preserving every
+    character (whitespace, newlines, punctuation) of `text` inside
+    that span. Word anchors use the same `\w+` tokenizer the previous
+    word-list rebuild used, so the word-count semantics are unchanged —
+    only the way we render the surrounding context does.
+    """
+    before = text[:match_start]
+    word_starts = [m.start() for m in re.finditer(r"\w+", before)]
+    if len(word_starts) >= context_words:
+        slice_start = word_starts[-context_words]
+    elif word_starts:
+        slice_start = word_starts[0]
+    else:
+        slice_start = match_start
+
+    after = text[match_end:]
+    word_ends = [m.end() for m in re.finditer(r"\w+", after)]
+    if len(word_ends) >= context_words:
+        slice_end = match_end + word_ends[context_words - 1]
+    elif word_ends:
+        slice_end = match_end + word_ends[-1]
+    else:
+        slice_end = match_end
+
+    return slice_start, slice_end
+
+
+def _env_positive_int(*names):
+    """
+    Return the first parseable positive int found under any of the
+    given env var names, or None. Used to let Alfred workflow-config
+    entries (UPPER_SNAKE) override docopt defaults, while still
+    honouring legacy lowercase per-invocation variable names.
+    """
+    for name in names:
+        raw = (os.environ.get(name) or "").strip()
+        if raw.isdigit():
+            value = int(raw)
+            if value > 0:
+                return value
+    return None
+
+
+def _is_unpacked_epub_dir(path):
+    """
+    True if `path` is an unpacked EPUB bundle directory (i.e. META-INF
+    /container.xml exists underneath). This is the same signal ebooklib
+    uses for its `Directory` reader branch, so anything passing this
+    check can be handed straight to `epub.read_epub()` — no zipping
+    step required. Covers both iBooks bundles (whose dir name ends in
+    `.epub`) and Yomu's EPUB cache (bare UUID directories).
+    """
+    return (
+        bool(path)
+        and os.path.isdir(path)
+        and os.path.isfile(os.path.join(path, "META-INF", "container.xml"))
+    )
+
+
 def parse_book_input(book_input):
     """
     Parse workflow-specific book arguments.
@@ -1230,6 +1349,12 @@ def parse_book_input(book_input):
       - regular filesystem paths
       - calibre-open|/abs/path/to/book.epub
       - calibre-open|/abs/path/to/book.epub|optional-location
+      - yomu-open|<meta_ident>|<identifier>|<file_ident>
+        Yomu stores each book as an unpacked EPUB bundle at
+        `YOMU_EPUB_CACHE_DIR/<identifier>/`, which ebooklib.read_epub
+        opens directly via its directory-reader branch — so we just
+        resolve the token to that path and reuse the single-EPUB
+        search pipeline.
     """
     if not book_input:
         return {"book_path": "", "open_arg": ""}
@@ -1238,6 +1363,14 @@ def parse_book_input(book_input):
         payload = book_input[len("calibre-open|") :]
         book_path = payload.split("|", 1)[0]
         return {"book_path": book_path, "open_arg": f"calibre-open|{book_path}"}
+
+    if book_input.startswith("yomu-open|"):
+        parts = book_input.split("|")
+        identifier = parts[2].strip() if len(parts) > 2 else ""
+        bundle_dir = (
+            os.path.join(YOMU_EPUB_CACHE_DIR, identifier) if identifier else ""
+        )
+        return {"book_path": bundle_dir, "open_arg": book_input}
 
     return {"book_path": book_input, "open_arg": ""}
 
@@ -1291,15 +1424,24 @@ def main():
                 return 1
     
     # Parse arguments
-    # Get context words from environment variable or command line argument
-    env_context = os.environ.get('context_words', '')
-    if env_context and env_context.isdigit():
-        context_words = int(env_context)
-    else:
+    # Workflow-configurable search tuning (set from Alfred's workflow
+    # configuration → "Search context words" / "Search proximity words";
+    # see the `userconfigurationconfig` entries in info.plist). The env
+    # names use the `SEARCH_*` prefix to match the existing workflow
+    # convention (SEARCH_SCOPE, USE_KINDLE, …). We also still honour the
+    # legacy lowercase `context_words` name some per-invocation Alfred
+    # nodes may already set. Env wins over the docopt default because
+    # docopt can't tell "user typed --context=10" apart from "no flag",
+    # so we can't invert the precedence without losing user overrides.
+    context_words = _env_positive_int(
+        'SEARCH_CONTEXT_WORDS', 'context_words'
+    )
+    if context_words is None:
         context_words = int(args['--context'])
-    
-    # Get proximity distance for 2-word searches
-    proximity_distance = int(args['--proximity']) if args['--proximity'] else 100
+
+    proximity_distance = _env_positive_int('SEARCH_PROXIMITY_WORDS')
+    if proximity_distance is None:
+        proximity_distance = int(args['--proximity']) if args['--proximity'] else 100
     
     create_epub = bool(args['--epub'])
     create_markdown = args['--markdown'] if args['--markdown'] is not None else True  # Default to True
@@ -1322,14 +1464,43 @@ def main():
         epub_path = os.path.expanduser(parsed_book["book_path"])
         book_open_arg = parsed_book["open_arg"]
         if alfred_format:
-            _, ext = os.path.splitext(epub_path.lower())
-            if ext != ".epub":
+            # Accept three shapes: a real `.epub` zip file, a directory
+            # whose name ends in `.epub` (iBooks bundles), or any
+            # directory holding `META-INF/container.xml` (Yomu's
+            # unpacked cache dirs, which are bare UUIDs without a
+            # `.epub` suffix). ebooklib.read_epub handles all three
+            # transparently via its Directory-reader branch.
+            lower = epub_path.lower()
+            is_epub_file = lower.endswith(".epub") and os.path.isfile(epub_path)
+            is_epub_bundle = os.path.isdir(epub_path) and (
+                lower.endswith(".epub") or _is_unpacked_epub_dir(epub_path)
+            )
+            if not (is_epub_file or is_epub_bundle):
+                raw_book_arg = (args['--book'] or '').strip()
+                is_yomu_token = raw_book_arg.startswith("yomu-open|")
+                if is_yomu_token:
+                    # The token parsed fine but the unpacked bundle
+                    # isn't on disk. Yomu populates its EPUB cache
+                    # lazily, so the right action is "open the book in
+                    # Yomu once", not "convert to EPUB in Calibre".
+                    warning_title = "⚠️ Yomu hasn't cached this book yet"
+                    warning_subtitle = (
+                        "Open the book in Yomu once (the reader unpacks "
+                        "its EPUB on first open), then try again."
+                    )
+                else:
+                    _, ext = os.path.splitext(lower)
+                    warning_title = "⚠️ Search supports EPUB files only"
+                    warning_subtitle = (
+                        f"This book is '{ext or 'unknown'}'. "
+                        "Convert/add an EPUB format in Calibre to search inside it."
+                    )
                 unsupported_json = {
                     "items": [
                         {
                             "uid": "unsupported-format",
-                            "title": "⚠️ Search supports EPUB files only",
-                            "subtitle": f"This book is '{ext or 'unknown'}'. Convert/add an EPUB format in Calibre to search inside it.",
+                            "title": warning_title,
+                            "subtitle": warning_subtitle,
                             "icon": {"path": "icons/Warning.png"},
                             "valid": False,
                         }
