@@ -12,6 +12,18 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
+				<string>88E41168-BDA4-4605-8F4C-A0A507AE11D1</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>sourceoutputuid</key>
+				<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
 				<string>28939AD5-7FDB-44B4-87C5-BFCA352716C7</string>
 				<key>modifiers</key>
 				<integer>0</integer>
@@ -81,7 +93,7 @@
 				<key>modifiersubtext</key>
 				<string></string>
 				<key>sourceoutputuid</key>
-				<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
+				<string>A2D06D9D-7E28-4B98-A9D2-19E2F3BBE8E1</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -92,6 +104,18 @@
 				<integer>0</integer>
 				<key>modifiersubtext</key>
 				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>5330E514-8491-49F5-98D8-DED98E264BC1</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>sourceoutputuid</key>
+				<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -115,6 +139,16 @@
 		<array/>
 		<key>C9F9AE76-99B2-4432-91CD-AF8D39A92E25</key>
 		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>88E41168-BDA4-4605-8F4C-A0A507AE11D1</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
 			<dict>
 				<key>destinationuid</key>
 				<string>28939AD5-7FDB-44B4-87C5-BFCA352716C7</string>
@@ -173,35 +207,21 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>behaviour</key>
-				<integer>2</integer>
-				<key>fontmode</key>
-				<integer>0</integer>
-				<key>fontsizing</key>
-				<integer>0</integer>
-				<key>footertext</key>
-				<string>{var:fragment_id}</string>
-				<key>inputfile</key>
-				<string></string>
-				<key>inputtype</key>
-				<integer>0</integer>
-				<key>loadingtext</key>
-				<string></string>
-				<key>outputmode</key>
-				<integer>0</integer>
-				<key>scriptinput</key>
-				<integer>0</integer>
-				<key>spellchecking</key>
-				<integer>0</integer>
-				<key>stackview</key>
-				<true/>
+				<key>autopaste</key>
+				<false/>
+				<key>clipboardtext</key>
+				<string>{query}</string>
+				<key>ignoredynamicplaceholders</key>
+				<false/>
+				<key>transient</key>
+				<false/>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.userinterface.text</string>
+			<string>alfred.workflow.output.clipboard</string>
 			<key>uid</key>
-			<string>28939AD5-7FDB-44B4-87C5-BFCA352716C7</string>
+			<string>88E41168-BDA4-4605-8F4C-A0A507AE11D1</string>
 			<key>version</key>
-			<integer>1</integer>
+			<integer>3</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -246,6 +266,39 @@
 			<string>alfred.workflow.utility.conditional</string>
 			<key>uid</key>
 			<string>04664B4B-E922-48E7-9DC8-492207C157B8</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>behaviour</key>
+				<integer>2</integer>
+				<key>fontmode</key>
+				<integer>0</integer>
+				<key>fontsizing</key>
+				<integer>0</integer>
+				<key>footertext</key>
+				<string>{var:fragment_id}</string>
+				<key>inputfile</key>
+				<string></string>
+				<key>inputtype</key>
+				<integer>0</integer>
+				<key>loadingtext</key>
+				<string></string>
+				<key>outputmode</key>
+				<integer>0</integer>
+				<key>scriptinput</key>
+				<integer>0</integer>
+				<key>spellchecking</key>
+				<integer>0</integer>
+				<key>stackview</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.userinterface.text</string>
+			<key>uid</key>
+			<string>28939AD5-7FDB-44B4-87C5-BFCA352716C7</string>
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
@@ -476,11 +529,11 @@ fi</string>
 						<key>matchcasesensitive</key>
 						<false/>
 						<key>matchmode</key>
-						<integer>1</integer>
+						<integer>0</integer>
 						<key>matchstring</key>
 						<string>drill_down_book</string>
 						<key>outputlabel</key>
-						<string>Markdown</string>
+						<string>Drill Down</string>
 						<key>uid</key>
 						<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
 					</dict>
@@ -490,11 +543,11 @@ fi</string>
 						<key>matchcasesensitive</key>
 						<false/>
 						<key>matchmode</key>
-						<integer>1</integer>
+						<integer>0</integer>
 						<key>matchstring</key>
-						<string>open_match</string>
+						<string>view_match</string>
 						<key>outputlabel</key>
-						<string>Open Match</string>
+						<string>Markdown</string>
 						<key>uid</key>
 						<string>A2D06D9D-7E28-4B98-A9D2-19E2F3BBE8E1</string>
 					</dict>
@@ -782,6 +835,19 @@ List, open, and search your eBooks ebooks with Alfred
 	- `shift+enter` ↩️ opens the book at the matched chapter/location (Calibre)
 - data is automatically cached for best performance. You can force a database refresh using the keyword `::books-refresh`
 
+## What's new in version 0.3
+
+- **Graceful handling of missing resources** — if a library source (Kindle, Apple Books, Yomu, Calibre) isn't installed, the workflow logs a clear message and skips it instead of crashing.
+- **Ctrl modifier shows searchability** — holding ctrl on any book row shows whether full-text search is available, with a specific reason when it isn't.
+- **Multi-book search drill-down** — folder-wide EPUB searches show a book overview sorted by match count; pressing Enter on a book drills into its individual matches instantly from cache.
+- **Search result caching** — full-text search results are cached on disk for a configurable duration (default: 11 days, adjustable in Workflow Configuration). Repeat searches return instantly.
+- **Overlapping search results merged** — nearby matches in the same chapter are merged into a single row with all occurrences highlighted.
+- **Longer search excerpts** — subtitle context doubled from 80 to 160 characters.
+- **Improved highlight QuickLook cards** — Georgia font preferred over New York for better readability and correct em-dash rendering. Existing cards are re-rendered automatically.
+- **Cleaner highlight modifiers** — ⌘↩ on any highlight row copies the passage to the clipboard; the old ⌥ fallback that pasted text into the Alfred query box is gone.
+- **Streamlined book-row modifiers** — the CMD modifier no longer shows the internal icon path.
+- **Thousand separators in match counts** — search results now display "1,234 matches" instead of "1234 matches".
+
 ## Limitations &amp; known issues ⚠️
 
 - **Opening a specific book in the new Kindle for Mac app (Lassen) is hacky and fragile.** Lassen exposes no way to deep-link to a book from outside: no supported URL scheme opens a book, there's no AppleScript dictionary, and Catalyst hides the view hierarchy from the Accessibility API so covers can't be targeted by AX role/label. ↩️ works around this by **driving the UI as if a human were doing it** — moving the mouse, clicking, typing — which is inherently brittle and will likely break on Kindle UI updates, layout changes, or anything that perturbs timing. The sequence: Kindle is foregrounded, the AX tree is walked to detect library vs reader view, the script slides the cursor into the auto-hiding top toolbar and clicks the back-arrow if needed, the search text field is clicked at its AX-reported center to focus it (Cmd+F is unreliable across library sub-states), the existing query is cleared, the book title is typed, Return filters the library, and a Quartz-posted double-click on the first grid cell opens it. This requires granting **Accessibility permission to Alfred** in *System Settings → Privacy &amp; Security → Accessibility*. The back-arrow click position and the book-cell double-click position are layout-dependent heuristics; tweak them in `kindle-lassen-open.sh` if they miss on your setup.
@@ -825,9 +891,9 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		<key>28939AD5-7FDB-44B4-87C5-BFCA352716C7</key>
 		<dict>
 			<key>xpos</key>
-			<real>1145</real>
+			<real>1435</real>
 			<key>ypos</key>
-			<real>35</real>
+			<real>75</real>
 		</dict>
 		<key>487CE6DD-5966-4E3E-9D67-EF1D60023887</key>
 		<dict>
@@ -862,9 +928,9 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		<key>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</key>
 		<dict>
 			<key>xpos</key>
-			<real>1045</real>
+			<real>990</real>
 			<key>ypos</key>
-			<real>315</real>
+			<real>320</real>
 		</dict>
 		<key>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</key>
 		<dict>
@@ -872,6 +938,13 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<real>1175</real>
 			<key>ypos</key>
 			<real>420</real>
+		</dict>
+		<key>88E41168-BDA4-4605-8F4C-A0A507AE11D1</key>
+		<dict>
+			<key>xpos</key>
+			<real>1215</real>
+			<key>ypos</key>
+			<real>15</real>
 		</dict>
 		<key>BA9E997F-E08E-4947-BBB4-8BF84341ED1D</key>
 		<dict>
@@ -1072,6 +1145,27 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<string>textfield</string>
 			<key>variable</key>
 			<string>SEARCH_PROXIMITY_WORDS</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>11</string>
+				<key>placeholder</key>
+				<string>11</string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>Number of days to keep cached full-text search results. Cached searches return instantly; after this many days the search re-scans your books.</string>
+			<key>label</key>
+			<string>Search cache duration (days)</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>SEARCH_CACHE_DAYS</string>
 		</dict>
 		<dict>
 			<key>config</key>

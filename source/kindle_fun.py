@@ -678,6 +678,11 @@ def _get_ibooks_collections(conn):
 
 def get_ibooks(myDatabase):
 	books = []
+	if not myDatabase or not os.path.exists(myDatabase):
+		log(f"Apple Books database not found: {myDatabase}")
+		with open(IBOOKS_PICKLE, "wb") as file:
+			pickle.dump(books, file)
+		return books
 	conn = sqlite3.connect(myDatabase)
 	conn.row_factory = sqlite3.Row
 	c = conn.cursor()
@@ -747,10 +752,15 @@ def get_ibooks(myDatabase):
 def get_kindle(myDatabase):
 	"""
     a function to build the kindle database for the new kindle app
-		
-   
+
+
     """
-    
+	if not myDatabase or not os.path.exists(myDatabase):
+		log(f"Kindle database not found: {myDatabase}")
+		with open(KINDLE_PICKLE, "wb") as file:
+			pickle.dump([], file)
+		return []
+
 	# Connect to the SQLite database
 	conn = sqlite3.connect(myDatabase)
 	conn.row_factory = sqlite3.Row

@@ -74,7 +74,9 @@ if not os.path.exists(DATA_FOLDER):
 #   v1 — initial JPG renderer (1200×800 fixed, NewYork/Georgia).
 #   v2 — Newsreader Medium body, auto-fit height, normalized
 #        intra-paragraph whitespace, darker ink, q=85 JPG.
-HIGHLIGHT_RENDER_VERSION = "v2"
+#   v3 — prefer Georgia over NewYork (better em-dash rendering,
+#        more readable at body size on all Macs).
+HIGHLIGHT_RENDER_VERSION = "v3"
 HIGHLIGHTS_IMG_FOLDER = f"{CACHE_FOLDER}/highlights_img/"
 if not os.path.exists(HIGHLIGHTS_IMG_FOLDER):
     os.makedirs(HIGHLIGHTS_IMG_FOLDER)
@@ -177,15 +179,22 @@ def defineKindleFolder ():
 
     else:
         kindle_path = ''
+        XML_CACHE = ''
+        KINDLE_CONTENT = ''
+        KINDLE_APP = ''
+        log ("no Kindle app found")
     return XML_CACHE, KINDLE_CONTENT, KINDLE_APP
 
 
 
 def define_iBooksFolder ():
     iBooks_path = os.path.expanduser('~/Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary/')
-    dbs = []
-    dbs += [each for each in os.listdir(iBooks_path)
-            if (each.endswith('.sqlite') and each.startswith('BKLibrary'))]
+    if not os.path.isdir(iBooks_path):
+        return ""
+    dbs = [each for each in os.listdir(iBooks_path)
+           if (each.endswith('.sqlite') and each.startswith('BKLibrary'))]
+    if not dbs:
+        return ""
     db_path = iBooks_path + dbs[0]
     return db_path
 

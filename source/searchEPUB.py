@@ -105,9 +105,12 @@ For detailed documentation, see README.md
 
 import glob
 import json
+import hashlib
+import json
 import os
 import re
 import sys
+import tempfile
 import time
 import uuid
 
@@ -362,7 +365,7 @@ def search_multiple_epubs(
                                 def end(self): return self._end
                                 def group(self): return self._text
                             
-                            match_text = f"{word1} ... {word2} ({distance} words apart)"
+                            match_text = f"{word1} ... {word2} ({distance} {'word' if distance == 1 else 'words'} apart)"
                             matches.append(MockMatch(start_pos, end_pos, match_text))
                     else:
                         # Regular exact text search
@@ -371,52 +374,27 @@ def search_multiple_epubs(
                         )
 
                     if matches:
-                        # For each match, extract context and create markdown
-                        for match in matches:
-                            # Create a unique ID for this match
+                        for m_slice_start, m_slice_end, spans in _merge_overlapping_matches(matches, text_content, context_words):
                             match_id = f"match_{uuid.uuid4().hex[:8]}"
 
-                            # Slice `text_content` verbatim around the
-                            # match so block-level paragraph breaks
-                            # survive into the excerpt. Leading/
-                            # trailing whitespace is trimmed so the
-                            # excerpt doesn't start or end on a stray
-                            # newline.
-                            slice_start, slice_end = _context_slice(
-                                text_content, match.start(), match.end(), context_words
-                            )
-                            raw_context = text_content[slice_start:slice_end]
+                            raw_context = text_content[m_slice_start:m_slice_end]
                             lstripped = raw_context.lstrip()
                             lead_trim = len(raw_context) - len(lstripped)
                             raw_context = lstripped.rstrip()
-                            match_offset = match.start() - slice_start - lead_trim
-                            match_len = match.end() - match.start()
 
-                            # `context` and `markdown_context` both
-                            # keep paragraph breaks now; only the
-                            # Alfred-item subtitle builder collapses
-                            # them for the single-line row. Blockquote
-                            # bullets in markdown_string still render
-                            # correctly when the body carries \n\n.
-                            context = raw_context
-                            markdown_context = (
-                                raw_context[:match_offset]
-                                + "**"
-                                + raw_context[match_offset:match_offset + match_len]
-                                + "**"
-                                + raw_context[match_offset + match_len:]
-                            )
-
-                            # Generate clean markdown string with book title
+                            markdown_context = _bold_spans(raw_context, m_slice_start + lead_trim, spans)
                             markdown_string = f"> {markdown_context}\n\n— *{book_title}, {chapter_title}*"
 
-                            # Store result
+                            match_label = spans[0][2]
+                            if len(spans) > 1:
+                                match_label += f" (+{len(spans) - 1} more)"
+
                             result = {
                                 "book_title": book_title,
                                 "book_filename": book_filename,
                                 "chapter": chapter_title,
-                                "context": context,
-                                "match": search_text,
+                                "context": raw_context,
+                                "match": match_label,
                                 "file": item.get_name(),
                                 "id": match_id,
                                 "markdown": markdown_string,
@@ -424,17 +402,6 @@ def search_multiple_epubs(
 
                             book_results.append(result)
                             all_results.append(result)
-
-                            # If we're creating modified EPUBs, add highlight to the content
-                            if create_modified_epubs:
-                                modified_content = (
-                                    content[: match.start()]
-                                    + f'<span id="{match_id}" style="background-color: #ffff00;">'
-                                    + content[match.start() : match.end()]
-                                    + "</span>"
-                                    + content[match.end() :]
-                                )
-                                item.set_content(modified_content.encode("utf-8"))
 
             # If we found results and want to create modified EPUBs, create one for this book
             if book_results and create_modified_epubs:
@@ -486,7 +453,7 @@ def search_multiple_epubs(
 
     if not quiet:
         print(f"\nSearch complete. Processed {processed_books} books.")
-        print(f"Total matches found: {len(all_results)}")
+        print(f"Total matches found: {len(all_results):,}")
 
     return all_results
 
@@ -569,12 +536,12 @@ def create_search_results_chapter(book, book_title, search_text, results):
 def export_alfred_books_overview(results, search_text, progress_info=None):
     """Export book overview for Alfred - one row per book with match counts"""
     import hashlib
-    alfred_json = {"items": []}
+    alfred_json = {"items": [], "skipknowledge": True}
     alfred_items = alfred_json["items"]
-    
+
     # Add rerun for progress updates if search is in progress
     if progress_info and not progress_info.get('is_complete', False):
-        alfred_json["rerun"] = 0.5  # Rerun every 0.5 seconds during search
+        alfred_json["rerun"] = 0.5
     
     # Show combined progress and summary if search is in progress
     if progress_info and not progress_info.get('is_complete', False):
@@ -605,12 +572,12 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
             books[book_title].append(result)
         
         # Combined progress and results summary
-        match_text = f"{total_matches} matches in {len(books)} books so far" if total_matches > 0 else "No matches yet"
+        match_text = f"{total_matches:,} matches in {len(books)} books so far" if total_matches > 0 else "No matches yet"
         
         alfred_items.append({
             "uid": "progress",
             "title": f"🔍 Searching ({processed}/{total}) • {match_text}",
-            "subtitle": f"{progress_bar} Currently searching: {current_book}",
+            "subtitle": f"{progress_bar} Currently searching: {current_book} — 💤 you can close Alfred and come back in a few minutes",
             "icon": {"path": "icon.png"},
             "valid": False
         })
@@ -641,43 +608,35 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
             books[book_title] = []
         books[book_title].append(result)
     
-    # Summary item always at the top when search is complete
-    summary_item = None
+    # Sort books by match count (most matches first)
+    sorted_books = sorted(books.items(), key=lambda x: len(x[1]), reverse=True)
+    total_books = len(sorted_books)
+
+    # Summary row first
     if progress_info and progress_info.get('is_complete', False):
-        summary_item = {
-            "uid": "aaaa-summary",  # UID starts with "aaaa" to ensure it sorts first alphabetically
+        alfred_items.append({
+            "uid": "aaaa-summary",
             "title": f"🔍 Search Results for '{search_text}'",
-            "subtitle": f"Found {total_matches} total matches across {len(books)} books",
+            "subtitle": f"Found {total_matches:,} total matches across {total_books} book{'s' if total_books != 1 else ''}",
             "icon": {"path": "icon.png"},
-            "valid": False
-        }
-    
-    # One item per book with progressive numbering
-    for book_index, (book_title, book_results) in enumerate(books.items(), 1):
+            "valid": False,
+        })
+
+    for book_index, (book_title, book_results) in enumerate(sorted_books, 1):
         match_count = len(book_results)
-        total_books = len(books)
-        # Sample context for the Alfred subtitle. Result contexts now
-        # carry paragraph breaks (see `_html_to_block_text` in the
-        # search routine), which Alfred renders as literal \n in
-        # subtitles — so collapse every whitespace run to a single
-        # space purely for the row preview. The untouched multi-line
-        # `context` is still shipped through as a workflow variable.
         sample_context = re.sub(
             r"\s+", " ", book_results[0].get('context', '').replace('**', '')
         ).strip()
         if len(sample_context) > 60:
             sample_context = sample_context[:57] + "..."
-        
-        # Create stable UID based on book title for consistent selection (starts with 'zzzz' to ensure summary sorts first)
-        stable_uid = f"zzzz-book-{hashlib.md5(book_title.encode()).hexdigest()[:8]}"
-        
+
         alfred_items.append({
-            "uid": stable_uid,
+            "uid": f"zzzz-book-{book_index:04d}",
             "title": f"📚 {book_title}",
-            "subtitle": f"{book_index}/{total_books} • {match_count} match{'es' if match_count != 1 else ''} • {sample_context}",
+            "subtitle": f"{book_index}/{total_books} • {match_count:,} match{'es' if match_count != 1 else ''} • {sample_context}",
             "icon": {"path": "icon.png"},
             "valid": True,
-            "arg": book_title,  # Simple arg for basic Alfred handling
+            "arg": " ",
             "variables": {
                 "action": "drill_down_book",
                 "book_title": book_title,
@@ -687,10 +646,6 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
                 "sample_context": sample_context
             }
         })
-    
-    # Ensure summary item is always first when search is complete
-    if summary_item:
-        alfred_items.insert(0, summary_item)
     
     return json.dumps(alfred_json, indent=2, ensure_ascii=False)
 
@@ -761,7 +716,7 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
             alfred_items.append({
                 "uid": f"zzzz-book-{hash(book_title)}",
                 "title": f"📚 {book_title}",
-                "subtitle": f"Found {match_count} match{'es' if match_count != 1 else ''} for '{search_text}'",
+                "subtitle": f"Found {match_count:,} match{'es' if match_count != 1 else ''} for '{search_text}'",
                 "icon": {"path": "icon.png"},
                 "valid": False,
                 "autocomplete": f"{book_title} ",
@@ -810,8 +765,8 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
                     display_location = clean_chapter
                 
                 # Truncate long context for subtitle
-                if len(context) > 80:
-                    context = context[:77] + "..."
+                if len(context) > 160:
+                    context = context[:157] + "..."
                 
                 match_arg = json.dumps({
                     "book": book_title,
@@ -868,7 +823,7 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
             if match_count > 10:
                 alfred_items.append({
                     "uid": f"zzzz-more-{hash(book_title)}",
-                    "title": f"   └─ ... and {match_count - 10} more matches",
+                    "title": f"   └─ ... and {match_count - 10:,} more matches",
                     "subtitle": "Use --markdown flag to see all results in detail",
                     "icon": {"path": "icon.png"},
                     "valid": False
@@ -882,16 +837,17 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
         summary_item = {
             "uid": "aaaa-summary",  # UID starts with "aaaa" to ensure it sorts first alphabetically
             "title": f"🔍 Search Results for '{search_text}'",
-            "subtitle": f"Found {total_matches} total matches across {book_count} books",
+            "subtitle": f"Found {total_matches:,} total matches across {book_count} books",
             "icon": {"path": "icon.png"},
             "valid": False
         }
         alfred_items.insert(0, summary_item)
     
     alfred_json = {
-        "items": alfred_items
+        "items": alfred_items,
+        "skipknowledge": True,
     }
-    
+
     return json.dumps(alfred_json, indent=2, ensure_ascii=False)
 
 
@@ -1016,7 +972,7 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
                             def end(self): return self._end
                             def group(self): return self._text
                         
-                        match_text = f"{word1} ... {word2} ({distance} words apart)"
+                        match_text = f"{word1} ... {word2} ({distance} {'word' if distance == 1 else 'words'} apart)"
                         matches.append(MockMatch(start_pos, end_pos, match_text))
                 else:
                     # Regular exact text search
@@ -1024,51 +980,24 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
                         re.finditer(re.escape(search_text), text_content, re.IGNORECASE)
                     )
                 
-                # Process each match
-                for match in matches:
-                    match_start = match.start()
-                    match_end = match.end()
-
-                    # Slice the original text verbatim between word
-                    # anchors so paragraph breaks from block-level
-                    # elements survive into the excerpt. Trimming
-                    # leading/trailing whitespace keeps the excerpt
-                    # from starting or ending on a stray newline.
-                    slice_start, slice_end = _context_slice(
-                        text_content, match_start, match_end, context_words
-                    )
+                # Merge matches whose context windows overlap so
+                # nearby occurrences become a single Alfred row.
+                for slice_start, slice_end, spans in _merge_overlapping_matches(matches, text_content, context_words):
                     raw_context = text_content[slice_start:slice_end]
                     lstripped = raw_context.lstrip()
                     lead_trim = len(raw_context) - len(lstripped)
                     raw_context = lstripped.rstrip()
-                    match_offset = match_start - slice_start - lead_trim
-                    match_len = match_end - match_start
 
-                    # Both `context` and `markdown` carry `**match**`
-                    # bold markers — the downstream Alfred item
-                    # builder strips them for the subtitle and keeps
-                    # them for the markdown/text view, matching the
-                    # pre-existing contract.
-                    context_text = (
-                        raw_context[:match_offset]
-                        + "**"
-                        + raw_context[match_offset:match_offset + match_len]
-                        + "**"
-                        + raw_context[match_offset + match_len:]
-                    )
-
-                    # Markdown body is just the bolded excerpt — the
-                    # "found in *chapter*" header used to sit on top here
-                    # but duplicated info already shown in the Alfred row
-                    # and the downstream markdown/text-view footer
-                    # (sourced from the `fragment_id` variable, see the
-                    # Alfred-item builder below).
+                    context_text = _bold_spans(raw_context, slice_start + lead_trim, spans)
                     markdown_match = f"{context_text}\n"
+                    match_label = spans[0][2]
+                    if len(spans) > 1:
+                        match_label += f" (+{len(spans) - 1} more)"
 
                     book_results.append({
                         "book_title": book_title,
                         "chapter": chapter_title,
-                        "match": match.group(),
+                        "match": match_label,
                         "context": context_text,
                         "markdown": markdown_match,
                         "file": item.get_name(),
@@ -1109,20 +1038,37 @@ def search_with_alfred_progress(folder_path, search_text, context_words=10, crea
     This function uses a temp file to track progress and outputs only ONE JSON 
     response per execution, relying on Alfred's rerun to call again.
     """
-    import hashlib
-    import json
-    import os
-    import sys
-    import tempfile
+    _cache_days = _env_positive_int('SEARCH_CACHE_DAYS') or 11
+    _CACHE_MAX_AGE = _cache_days * 86400
+
+    # Expand tilde in folder path
+    folder_path = os.path.expanduser(folder_path)
+
+    # Return cached results if fresh enough
+    cache_file = _search_cache_path(search_text, folder_path)
+    if os.path.exists(cache_file):
+        age = time.time() - os.path.getmtime(cache_file)
+        if age < _CACHE_MAX_AGE:
+            with open(cache_file, 'r') as f:
+                cached = json.load(f)
+            results = cached.get('results', [])
+            total_books = len({r['book_title'] for r in results}) if results else 0
+            progress_info = {
+                'processed_books': total_books,
+                'total_books': total_books,
+                'current_book': 'Complete',
+                'is_complete': True,
+            }
+            json_output = export_alfred_books_overview(results, search_text, progress_info)
+            sys.stdout.write(json_output + '\n')
+            sys.stdout.flush()
+            return results
 
     # Create unique state file based on search parameters
     state_key = f"{folder_path}_{search_text}_{context_words}"
     state_hash = hashlib.md5(state_key.encode()).hexdigest()[:8]
     state_file = os.path.join(tempfile.gettempdir(), f"alfred_epub_search_{state_hash}.json")
-    
-    # Expand tilde in folder path
-    folder_path = os.path.expanduser(folder_path)
-    
+
     # Find all EPUB files
     epub_files = []
     if os.path.exists(folder_path):
@@ -1156,10 +1102,18 @@ def search_with_alfred_progress(folder_path, search_text, context_words=10, crea
     
     # If search is complete, show final results
     if state['complete'] or state['processed'] >= total_files:
-        # Clean up state file
+        # Persist results for drill-down before cleaning up temp state
+        cache_file = _search_cache_path(search_text, folder_path)
+        with open(cache_file, 'w') as f:
+            json.dump({
+                'search_text': search_text,
+                'folder_path': folder_path,
+                'results': state['results'],
+            }, f)
+
         if os.path.exists(state_file):
             os.remove(state_file)
-        
+
         progress_info = {
             'processed_books': total_files,
             'total_books': total_files,
@@ -1309,6 +1263,57 @@ def _context_slice(text, match_start, match_end, context_words):
     return slice_start, slice_end
 
 
+def _merge_overlapping_matches(matches, text, context_words):
+    """
+    Merge matches whose context windows overlap into single results.
+
+    Each incoming match is a regex-style object with `.start()`, `.end()`,
+    `.group()`.  Returns a list of `(slice_start, slice_end, spans)` tuples
+    where `spans` is a list of `(match_start, match_end, group_text)` for
+    every original match inside the merged window.
+    """
+    if not matches:
+        return []
+
+    entries = []
+    for m in matches:
+        s_start, s_end = _context_slice(text, m.start(), m.end(), context_words)
+        entries.append((s_start, s_end, m.start(), m.end(), m.group()))
+
+    entries.sort(key=lambda e: e[0])
+
+    merged = []
+    cur_s, cur_e = entries[0][0], entries[0][1]
+    cur_spans = [(entries[0][2], entries[0][3], entries[0][4])]
+
+    for s_start, s_end, m_start, m_end, m_group in entries[1:]:
+        if s_start <= cur_e:
+            cur_e = max(cur_e, s_end)
+            cur_spans.append((m_start, m_end, m_group))
+        else:
+            merged.append((cur_s, cur_e, cur_spans))
+            cur_s, cur_e = s_start, s_end
+            cur_spans = [(m_start, m_end, m_group)]
+    merged.append((cur_s, cur_e, cur_spans))
+    return merged
+
+
+def _bold_spans(text, slice_start, spans):
+    """
+    Insert **bold** markers around every match span inside `text`.
+    `spans` is a list of `(abs_start, abs_end, _)` in document coordinates;
+    `slice_start` converts them to offsets within `text`.
+    """
+    sorted_spans = sorted(spans, key=lambda s: s[0], reverse=True)
+    result = text
+    for abs_start, abs_end, _ in sorted_spans:
+        offset = abs_start - slice_start
+        end_offset = abs_end - slice_start
+        if 0 <= offset <= end_offset <= len(result):
+            result = result[:offset] + "**" + result[offset:end_offset] + "**" + result[end_offset:]
+    return result
+
+
 def _env_positive_int(*names):
     """
     Return the first parseable positive int found under any of the
@@ -1323,6 +1328,19 @@ def _env_positive_int(*names):
             if value > 0:
                 return value
     return None
+
+
+def _search_cache_path(search_text, folder_path):
+    """Return a persistent cache file path for a folder search."""
+    try:
+        from config import CACHE_FOLDER
+    except Exception:
+        CACHE_FOLDER = tempfile.gettempdir()
+    cache_dir = os.path.join(CACHE_FOLDER, "epub_search")
+    os.makedirs(cache_dir, exist_ok=True)
+    key = f"{os.path.expanduser(folder_path)}_{search_text}"
+    h = hashlib.md5(key.encode()).hexdigest()[:12]
+    return os.path.join(cache_dir, f"search_{h}.json")
 
 
 def _is_unpacked_epub_dir(path):
@@ -1380,7 +1398,51 @@ def main():
     args = docopt(__doc__, version='EPUB Search Tool 1.0')
     
     search_text = args['<search_text>']
-    
+
+    # ---- Drill-down: user actioned a book row from the folder overview.
+    # Read cached results, filter to that book, and show per-match rows.
+    if os.environ.get('action') == 'drill_down_book' and args.get('--alfred'):
+        drill_book = os.environ.get('book_title', '')
+        drill_search = os.environ.get('search_term', '')
+        folder_path = os.path.expanduser(args['--folder'])
+
+        cache_file = _search_cache_path(drill_search, folder_path)
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                cached = json.load(f)
+            book_results = [
+                r for r in cached.get('results', [])
+                if r.get('book_title') == drill_book
+            ]
+            book_filename = os.environ.get('book_filename', '')
+            book_open_arg = ""
+            if book_filename:
+                parsed = parse_book_input(
+                    os.path.join(folder_path, book_filename)
+                )
+                book_open_arg = parsed["open_arg"]
+            context_words = (
+                _env_positive_int('SEARCH_CONTEXT_WORDS', 'context_words')
+                or int(args['--context'])
+            )
+            json_output = export_alfred_json(
+                book_results, drill_search,
+                context_words=context_words,
+                book_open_arg=book_open_arg,
+            )
+            print(json_output)
+            return 0
+
+        error_json = {"items": [{
+            "uid": "cache-miss",
+            "title": "Search results expired",
+            "subtitle": "Run the folder search again to refresh",
+            "icon": {"path": "icon.png"},
+            "valid": False,
+        }]}
+        print(json.dumps(error_json, indent=2))
+        return 1
+
     # Check for persistent Alfred variables from previous workflow step
     if os.environ.get('book_title') and os.environ.get('search_term'):
         book_title = os.environ.get('book_title')
@@ -1450,7 +1512,6 @@ def main():
     alfred_format = bool(args['--alfred'])
     
     if alfred_format:
-        import sys
         print(f"[DEBUG] Alfred mode enabled. Search term: '{search_text}'", file=sys.stderr)
     
 
@@ -1509,17 +1570,11 @@ def main():
                 print(json.dumps(unsupported_json, indent=2, ensure_ascii=False))
                 return 0
         if alfred_format:
-            # For single book, search and output Alfred JSON directly
-            import sys
             print(f"[DEBUG] Starting single book search for '{search_text}'...", file=sys.stderr)
             results = search_single_epub(epub_path, search_text, context_words, create_epub, quiet=True, proximity_distance=proximity_distance)
             print(f"[DEBUG] Search completed. Found {len(results) if results else 0} matches.", file=sys.stderr)
             json_output = export_alfred_json(results, search_text, context_words=context_words, book_open_arg=book_open_arg)
             print(json_output)
-            # Also output to stderr for debugging
-            import sys
-            print(f"[DEBUG] Alfred JSON output:", file=sys.stderr)
-            print(json_output, file=sys.stderr)
             return 0
         else:
             results = search_single_epub(epub_path, search_text, context_words, create_epub, quiet=alfred_format, proximity_distance=proximity_distance)
@@ -1534,12 +1589,10 @@ def main():
         # Search folder of EPUB files
         folder_path = args['--folder']
         if alfred_format:
-            import sys
             print(f"[DEBUG] Starting folder search with Alfred progress for '{search_text}'...", file=sys.stderr)
-            # Use Alfred progress function that outputs JSON during search
             results = search_with_alfred_progress(folder_path, search_text, context_words, create_epub, proximity_distance)
             print(f"[DEBUG] Alfred progress search completed. Found {len(results) if results else 0} matches.", file=sys.stderr)
-            return 0  # Exit early since progress function handles output
+            return 0
         else:
             results = search_multiple_epubs(folder_path, search_text, context_words, create_epub, quiet=alfred_format, proximity_distance=proximity_distance)
         

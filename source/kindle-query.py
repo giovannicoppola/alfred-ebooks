@@ -471,10 +471,16 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 				},
 			}
 
+		# ⌘↩  — copy the highlight text to the clipboard.
+		if h.text or h.note:
+			copy_body = _normalize_body(h.text or h.note)
+			item["mods"]["cmd"] = {
+				"valid": True,
+				"subtitle": f"⌘↩ Copy to clipboard",
+				"arg": copy_body,
+			}
+
 		# ⇧↩  — open the book (same deep-link as the header row's ↩).
-		# This is routed through the default Conditional via the
-		# `action=open_book` variable, so it piggybacks on the existing
-		# enter-path dispatcher and needs no new graph connection.
 		open_arg = h.arg
 		if not open_arg and target_book is not None:
 			open_arg = _book_open_arg(target_book)
@@ -735,16 +741,12 @@ def build_highlights_response(highlights, books, search_string):
 		}
 		if quicklook_path:
 			item["quicklookurl"] = quicklook_path
-		# cmd+enter copies the highlight text to the clipboard (Alfred shows
-		# the subtitle text of the mod block). Handy for quoting passages.
-		# Normalize first so hard wraps from the source annotation don't
-		# survive the paste into a notes app.
 		if h.text or h.note:
 			copy_body = _normalize_body(h.text or h.note)
 			item["mods"] = {
 				"cmd": {
 					"valid": True,
-					"subtitle": f"Copy highlight: {copy_body[:80]}",
+					"subtitle": f"⌘↩ Copy to clipboard",
 					"arg": copy_body,
 				}
 			}
@@ -912,32 +914,31 @@ def serveBooks(books, result):
 				"path": myBook.icon_path
 
 			},
-			"mods": {
-				"cmd": {
-					"valid": True,
-					"subtitle": myBook.icon_path
-				}
-			},
+			"mods": {},
 			'arg': open_arg
 		}
 
-		# alt+↩ routes (via the alt-keyed connection on the main script
-		# filter → Call External Trigger → `highlightsDrill` script filter)
-		# into drill-down mode: one highlight per Alfred row, full text
-		# visible. The book identity travels as Alfred workflow `variables`
-		# on this mod — never through the query string — so the drill-down
-		# search box opens empty and the downstream script reads
-		# drill_source / drill_book_id from env. We ALWAYS attach the mod,
-		# even for books with zero highlights, because without it Alfred
-		# falls back to the row's default `arg` (e.g. `yomu-open|…`) and
-		# that token ends up pre-filled in the drill-down search box.
+		search_book_arg, search_reason = _resolve_searchable_epub(myBook)
+		if search_book_arg:
+			item["mods"]["ctrl"] = {
+				"valid": True,
+				"subtitle": f"⌃↩ Search inside this book",
+				"arg": search_book_arg,
+			}
+		else:
+			item["mods"]["ctrl"] = {
+				"valid": False,
+				"subtitle": f"⌃↩ Not searchable — {search_reason}",
+				"arg": "",
+			}
+
 		book_hls = getattr(myBook, "_highlights", []) or []
 
 		if myBook.bookID:
 			if book_hls:
 				alt_subtitle = (
 					f"⌥↩ List {len(book_hls)} highlight"
-					f"{'s' if len(book_hls) != 1 else ''} one-per-row"
+					f"{'s' if len(book_hls) != 1 else ''}"
 				)
 			else:
 				alt_subtitle = "⌥↩ No highlights captured for this book yet"
@@ -984,7 +985,9 @@ def main():
 	rebuilt_sources = set()
 
 	if USE_KINDLE:
-		if KINDLE_APP == "classic":
+		if not KINDLE_APP:
+			log("Kindle enabled but no Kindle app found on this machine — skipping")
+		elif KINDLE_APP == "classic":
 
 			myContentBooks = getDownloadedASINs(KINDLE_PATH) # output is a list of downloaded book ASINs
 			#log(myContentBooks)
@@ -1021,63 +1024,72 @@ def main():
 
 
 	if USE_IBOOKS:
-		if not os.path.exists(IBOOKS_PICKLE):
-				log ("building new iBooks database")
+		if not IBOOKS_PATH:
+			log("Apple Books enabled but not found on this machine — skipping")
+		else:
+			if not os.path.exists(IBOOKS_PICKLE):
+					log ("building new iBooks database")
+					get_ibooks(IBOOKS_PATH)
+					rebuilt_sources.add("iBooks")
+
+			elif checkTimeStamp(IBOOKS_PATH,TIMESTAMP_IBOOKS):
+				log ("outdated, building new iBooks database")
 				get_ibooks(IBOOKS_PATH)
 				rebuilt_sources.add("iBooks")
-				
-		elif checkTimeStamp(IBOOKS_PATH,TIMESTAMP_IBOOKS):
-			log ("outdated, building new iBooks database")
-			get_ibooks(IBOOKS_PATH)
-			rebuilt_sources.add("iBooks")
-			
-		else:
-			log ("using existing iBooks database")
-			# Load the list of books from the file
-		
-		with open(IBOOKS_PICKLE, 'rb') as file:
-			myBooks = myBooks + pickle.load(file)
 
-		if "iBooks" in rebuilt_sources or not os.path.exists(IBOOKS_HL_PICKLE):
-			get_ibooks_highlights(IBOOKS_ANNOTATION_DB)
+			else:
+				log ("using existing iBooks database")
+				# Load the list of books from the file
+
+			with open(IBOOKS_PICKLE, 'rb') as file:
+				myBooks = myBooks + pickle.load(file)
+
+			if "iBooks" in rebuilt_sources or not os.path.exists(IBOOKS_HL_PICKLE):
+				get_ibooks_highlights(IBOOKS_ANNOTATION_DB)
 
 	if USE_YOMU:
-		# For Yomu we use a local CoreData SQLite file as the authoritative source.
-		# Rebuild the cache if the DB mtime changes.
-		if not os.path.exists(YOMU_PICKLE):
-			log("building new Yomu database")
-			get_yomu(YOMU_DATA_DB)
-			rebuilt_sources.add("Yomu")
+		if not os.path.exists(YOMU_DATA_DB):
+			log(f"Yomu enabled but database not found ({YOMU_DATA_DB}) — skipping")
+		else:
+			# For Yomu we use a local CoreData SQLite file as the authoritative source.
+			# Rebuild the cache if the DB mtime changes.
+			if not os.path.exists(YOMU_PICKLE):
+				log("building new Yomu database")
+				get_yomu(YOMU_DATA_DB)
+				rebuilt_sources.add("Yomu")
 
-		elif os.path.exists(YOMU_DATA_DB) and checkTimeStamp(YOMU_DATA_DB, TIMESTAMP_YOMU):
-			log("outdated, building new Yomu database")
-			get_yomu(YOMU_DATA_DB)
-			rebuilt_sources.add("Yomu")
+			elif checkTimeStamp(YOMU_DATA_DB, TIMESTAMP_YOMU):
+				log("outdated, building new Yomu database")
+				get_yomu(YOMU_DATA_DB)
+				rebuilt_sources.add("Yomu")
 
-		if os.path.exists(YOMU_PICKLE):
-			with open(YOMU_PICKLE, 'rb') as file:
-				myBooks = myBooks + pickle.load(file)
+			if os.path.exists(YOMU_PICKLE):
+				with open(YOMU_PICKLE, 'rb') as file:
+					myBooks = myBooks + pickle.load(file)
 
-		if "Yomu" in rebuilt_sources or not os.path.exists(YOMU_HL_PICKLE):
-			get_yomu_highlights(YOMU_DATA_DB)
+			if "Yomu" in rebuilt_sources or not os.path.exists(YOMU_HL_PICKLE):
+				get_yomu_highlights(YOMU_DATA_DB)
 
 	if USE_CALIBRE:
-		if not os.path.exists(CALIBRE_PICKLE):
-			log("building new Calibre database")
-			get_calibre(CALIBRE_METADATA_DB)
-			rebuilt_sources.add("Calibre")
+		if not os.path.exists(CALIBRE_METADATA_DB):
+			log(f"Calibre enabled but metadata DB not found ({CALIBRE_METADATA_DB}) — skipping")
+		else:
+			if not os.path.exists(CALIBRE_PICKLE):
+				log("building new Calibre database")
+				get_calibre(CALIBRE_METADATA_DB)
+				rebuilt_sources.add("Calibre")
 
-		elif os.path.exists(CALIBRE_METADATA_DB) and checkTimeStamp(CALIBRE_METADATA_DB, TIMESTAMP_CALIBRE):
-			log("outdated, building new Calibre database")
-			get_calibre(CALIBRE_METADATA_DB)
-			rebuilt_sources.add("Calibre")
+			elif checkTimeStamp(CALIBRE_METADATA_DB, TIMESTAMP_CALIBRE):
+				log("outdated, building new Calibre database")
+				get_calibre(CALIBRE_METADATA_DB)
+				rebuilt_sources.add("Calibre")
 
-		if os.path.exists(CALIBRE_PICKLE):
-			with open(CALIBRE_PICKLE, 'rb') as file:
-				myBooks = myBooks + pickle.load(file)
+			if os.path.exists(CALIBRE_PICKLE):
+				with open(CALIBRE_PICKLE, 'rb') as file:
+					myBooks = myBooks + pickle.load(file)
 
-		if "Calibre" in rebuilt_sources or not os.path.exists(CALIBRE_HL_PICKLE):
-			get_calibre_highlights(CALIBRE_METADATA_DB)
+			if "Calibre" in rebuilt_sources or not os.path.exists(CALIBRE_HL_PICKLE):
+				get_calibre_highlights(CALIBRE_METADATA_DB)
 
 	# Load highlights and project per-book counts back onto the Book objects
 	# so the UI can show a 💬 N chip without a second lookup. We also stash

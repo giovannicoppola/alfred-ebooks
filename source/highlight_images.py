@@ -92,13 +92,6 @@ _CAPTION_GAP = 14
 _BODY_GAP = 18
 _NOTE_GAP = 28
 
-# Font candidates: try several common macOS fonts in order, fall back
-# to Pillow's built-in bitmap font if none load. We prefer Newsreader
-# Medium (Google Fonts, editorial serif designed for on-screen reading)
-# because at ~30 pt the Regular weight reads a little spindly against
-# a warm background; Medium has more presence without feeling bold.
-# Regular and other weights remain in the chain so we still work if
-# only a partial family is installed.
 _USER_FONTS = os.path.expanduser("~/Library/Fonts")
 _SERIF_CANDIDATES = [
 	f"{_USER_FONTS}/Newsreader-Medium.ttf",
@@ -106,11 +99,11 @@ _SERIF_CANDIDATES = [
 	f"{_USER_FONTS}/Newsreader-VariableFont_opsz,wght.ttf",
 	"/Library/Fonts/Newsreader-Medium.ttf",
 	"/Library/Fonts/Newsreader-Regular.ttf",
-	"/System/Library/Fonts/NewYork.ttf",
 	"/System/Library/Fonts/Supplemental/Georgia.ttf",
 	"/Library/Fonts/Georgia.ttf",
 	"/System/Library/Fonts/Supplemental/Charter.ttc",
 	"/System/Library/Fonts/Palatino.ttc",
+	"/System/Library/Fonts/NewYork.ttf",
 	"Georgia.ttf",
 ]
 _SANS_CANDIDATES = [

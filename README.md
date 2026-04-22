@@ -30,7 +30,23 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 
 <h1 id="whats-new">What's new ✨</h1>
 
-Highlights of the latest dev-branch work (full details in [whatsnew.md](whatsnew.md)):
+### Version 0.3
+
+- **Graceful handling of missing resources** — if a user enables a library source (Kindle, Apple Books, Yomu, Calibre) that isn't installed, the workflow logs a clear message and skips it instead of crashing.
+- **`⌃` modifier shows searchability** — holding ctrl on any book row now shows whether full-text search is available for that book, with a specific reason when it isn't (e.g. "Kindle books aren't searchable locally", "the .epub file isn't on disk").
+- **Multi-book search drill-down** — folder-wide EPUB searches now show a book overview sorted by match count; pressing ↩ on a book drills into its individual matches instantly (served from cache, no re-scanning).
+- **Search result caching** — full-text search results are persisted on disk and reused for the configurable cache duration (default: 11 days). Repeat searches return instantly. Cache duration is adjustable in Workflow Configuration → "Search cache duration (days)".
+- **Overlapping search results merged** — nearby matches in the same chapter are merged into a single result row with all occurrences highlighted, instead of showing near-duplicate rows.
+- **Longer search excerpts** — subtitle context for search matches doubled from 80 to 160 characters.
+- **Singular/plural "word apart"** — proximity search now correctly says "1 word apart" instead of "1 words apart".
+- **Improved highlight QuickLook cards** — the font cascade now prefers Georgia over New York for better readability and correct em-dash rendering on all Macs. Existing cards are automatically re-rendered.
+- **Cleaner highlight modifiers** — `⌘↩` on any highlight row copies the passage to the clipboard; the old `⌥` fallback that pasted text into the Alfred query box is gone.
+- **Streamlined book-row modifiers** — the CMD modifier no longer shows the internal icon path.
+- **Thousand separators in match counts** — search results now display "1,234 matches" instead of "1234 matches" for easier scanning.
+
+### Version 0.2
+
+Highlights of the v0.2 dev-branch work (full details in [whatsnew.md](whatsnew.md)):
 
 - **Open a specific book in the new Kindle for Mac app (Lassen)** — previously the workflow could only foreground the app; now ↩️ on a Kindle book opens that exact book via UI automation. *Hacky and fragile* (driven by mouse moves, clicks, and keystrokes — see the [Limitations](#known-issues) section), but it works today.
 - **Full-text EPUB search engine** with a 1,340-line standalone search engine, proximity search for two-word queries, an Alfred-native progressive UI, and Markdown / annotated-EPUB report generation.
@@ -130,6 +146,7 @@ Highlights of the latest dev-branch work (full details in [whatsnew.md](whatsnew
 
 <h1 id="changelog">Changelog 🧰</h1>
 
+- 04-22-2026: version 0.3: search caching, drill-down, graceful error handling
 - 10-07-2024: version 0.2: from kindle to eBooks
 - 02-28-2023: version 0.1
 
