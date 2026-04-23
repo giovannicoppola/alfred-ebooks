@@ -26,8 +26,9 @@ Arguments:
 Options:
   -h --help            Show this detailed help screen
   --version            Show version information
-  --folder=<path>      Folder containing EPUB files 
+  --folder=<path>      Folder containing EPUB files
                        [default: ~/Library/Containers/com.apple.BKAgentService/Data/Documents/iBooks/Books]
+                       Default also scans iCloud Books Documents when that folder exists.
   --book=<file>        Search in a single EPUB file instead of folder
   --context=<n>        Number of context words around each match [default: 10]
   --proximity=<n>      Maximum word distance for 2-word proximity search [default: 100]
@@ -37,6 +38,8 @@ Options:
   --markdown           Generate markdown file with search results [default: enabled]
   --group              Group results by book in markdown output [default: enabled]
   --alfred             Output results in Alfred JSON format for workflow integration
+                       Library-wide Alfred search uses a nohup background worker by default;
+                       set EPUB_SEARCH_ALFRED_SYNC=1 for legacy one-book-per-rerun mode.
 
 BASIC EXAMPLES:
   searchEPUB.py "Einstein"
@@ -109,6 +112,8 @@ import hashlib
 import json
 import os
 import re
+import shlex
+import subprocess
 import sys
 import tempfile
 import time
@@ -132,10 +137,86 @@ except Exception:
         "/Data/Library/Caches/EBook/EPub"
     )
 
-# Default settings
-DEFAULT_EPUB_FOLDER = "~/Library/Containers/com.apple.BKAgentService/Data/Documents/iBooks/Books"
-DEFAULT_EPUB_FOLDER = "~/Library/Mobile Documents/iCloud~com~apple~iBooks/Documents/"
+# Apple Books stores EPUBs under BKAgentService for some titles and under
+# iCloud Drive "Books" documents for many sideloaded / synced copies. The
+# docopt default below is the BKAgent path; `resolve_epub_scan_roots` expands
+# that (or an explicit path equal to either root) into both locations when
+# both exist.
+APPLE_BOOKS_EPUB_ROOT_BKAGENT = (
+    "~/Library/Containers/com.apple.BKAgentService/Data/Documents/iBooks/Books"
+)
+APPLE_BOOKS_EPUB_ROOT_ICLOUD = (
+    "~/Library/Mobile Documents/iCloud~com~apple~iBooks/Documents/"
+)
 DEFAULT_CONTEXT_WORDS = 10
+
+
+def _norm_epub_dir(p):
+    return os.path.normpath(os.path.expanduser(p or ""))
+
+
+def _apple_books_epub_roots_norm():
+    return (
+        _norm_epub_dir(APPLE_BOOKS_EPUB_ROOT_BKAGENT),
+        _norm_epub_dir(APPLE_BOOKS_EPUB_ROOT_ICLOUD),
+    )
+
+
+def resolve_epub_scan_roots(folder_arg):
+    """
+    Return a list of directories to scan for *.epub.
+
+    If `folder_arg` is the workflow default (BKAgent) or either canonical
+    Apple Books EPUB root, return both of those roots that exist on disk
+    (BKAgent first, then iCloud). Otherwise return a single-element list
+    for the given path if it is a directory.
+    """
+    if not folder_arg or not str(folder_arg).strip():
+        return []
+    user = _norm_epub_dir(folder_arg)
+    apple_roots = list(_apple_books_epub_roots_norm())
+    if user in apple_roots:
+        out = []
+        for r in apple_roots:
+            if os.path.isdir(r) and r not in out:
+                out.append(r)
+        return out
+    return [user] if os.path.isdir(user) else []
+
+
+def epub_scan_cache_token(roots):
+    """Stable string for cache keys / state when scanning one or more roots."""
+    if not roots:
+        return ""
+    return "\x1f".join(roots)
+
+
+def _collect_epub_paths_one_root(folder_path):
+    """Paths under one directory whose names end in .epub (file or bundle)."""
+    folder_path = os.path.expanduser(folder_path)
+    found = glob.glob(os.path.join(folder_path, "*.epub"))
+    out = []
+    for item_path in found:
+        if os.path.isfile(item_path) or os.path.isdir(item_path):
+            out.append(item_path)
+    return out
+
+
+def _collect_epub_paths_deduped_across_roots(roots):
+    """Ordered EPUB paths across roots, skipping duplicate realpaths."""
+    seen = set()
+    ordered = []
+    for root in roots:
+        for item_path in _collect_epub_paths_one_root(root):
+            try:
+                rp = os.path.realpath(item_path)
+            except OSError:
+                rp = item_path
+            if rp in seen:
+                continue
+            seen.add(rp)
+            ordered.append(item_path)
+    return ordered
 
 
 def simple_tokenize(text):
@@ -196,50 +277,28 @@ def is_proximity_search(search_text):
     return len(words) == 2
 
 
-def search_multiple_epubs(
-    folder_path, search_text, context_words=10, create_modified_epubs=True, quiet=False, proximity_distance=100
+def _search_multiple_epubs_one_folder(
+    folder_path,
+    search_text,
+    context_words=10,
+    create_modified_epubs=True,
+    quiet=False,
+    proximity_distance=100,
 ):
-    """
-    Search multiple EPUB files in a folder for specific text.
-
-    Parameters:
-    - folder_path: Path to folder containing EPUB files
-    - search_text: Text to search for
-    - context_words: Number of surrounding words to include in results
-    - create_modified_epubs: Whether to create modified EPUBs with search results
-
-    Returns:
-    - List of search results with book title, chapter, context and markdown representation
-    """
-    # Expand tilde in folder path
+    """Search every *.epub under a single directory (see `search_multiple_epubs`)."""
     folder_path = os.path.expanduser(folder_path)
-    
-    # Find all EPUB files in the folder (both files and directories with .epub extension)
-    epub_files = []
-    
-    # Look for regular .epub files
-    epub_files.extend(glob.glob(os.path.join(folder_path, "*.epub")))
-    
-    # Filter to separate files and directories
-    epub_file_list = []
-    for item in epub_files:
-        if os.path.isfile(item):
-            epub_file_list.append(item)
-        elif os.path.isdir(item):
-            # This is an EPUB bundle (directory), which is common on macOS Books app
-            epub_file_list.append(item)
-    
-    if not epub_file_list:
+    epub_files = _collect_epub_paths_one_root(folder_path)
+
+    if not epub_files:
         if not quiet:
             print(f"No EPUB files found in {folder_path}")
             print(f"Checked for both .epub files and .epub directories")
-            # List what's actually in the directory for debugging
             try:
                 items = os.listdir(folder_path)
                 epub_items = [item for item in items if item.endswith('.epub')]
                 if epub_items:
                     print(f"Found {len(epub_items)} items with .epub extension:")
-                    for item in epub_items[:5]:  # Show first 5
+                    for item in epub_items[:5]:
                         item_path = os.path.join(folder_path, item)
                         if os.path.isdir(item_path):
                             print(f"  {item} (directory)")
@@ -250,8 +309,6 @@ def search_multiple_epubs(
             except Exception as e:
                 print(f"Could not list directory contents: {e}")
         return []
-    
-    epub_files = epub_file_list
 
     if not quiet:
         print(f"Found {len(epub_files)} EPUB files to search")
@@ -260,7 +317,6 @@ def search_multiple_epubs(
     processed_books = 0
     total_books = len(epub_files)
 
-    # Process each EPUB file
     for epub_file in epub_files:
         try:
             processed_books += 1
@@ -392,6 +448,7 @@ def search_multiple_epubs(
                             result = {
                                 "book_title": book_title,
                                 "book_filename": book_filename,
+                                "epub_path": os.path.abspath(epub_file),
                                 "chapter": chapter_title,
                                 "context": raw_context,
                                 "match": match_label,
@@ -456,6 +513,41 @@ def search_multiple_epubs(
         print(f"Total matches found: {len(all_results):,}")
 
     return all_results
+
+
+def search_multiple_epubs(
+    folder_path, search_text, context_words=10, create_modified_epubs=True, quiet=False, proximity_distance=100
+):
+    """
+    Search EPUB files for specific text. When `folder_path` resolves to the
+    default Apple Books layout (BKAgent and/or iCloud documents), every
+    existing root is scanned in order.
+    """
+    roots = resolve_epub_scan_roots(folder_path)
+    if not roots:
+        if not quiet:
+            print(f"EPUB scan folder not found: {folder_path}")
+        return []
+    combined = []
+    for idx, root in enumerate(roots):
+        if not quiet and len(roots) > 1:
+            print(f"Scanning location ({idx + 1}/{len(roots)}): {root}")
+        combined.extend(
+            _search_multiple_epubs_one_folder(
+                root,
+                search_text,
+                context_words,
+                create_modified_epubs,
+                quiet,
+                proximity_distance,
+            )
+        )
+    if not quiet and len(roots) > 1:
+        print(
+            f"\nSearch complete across {len(roots)} locations. "
+            f"Total matches found: {len(combined):,}"
+        )
+    return combined
 
 
 def create_search_results_chapter(book, book_title, search_text, results):
@@ -565,6 +657,8 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
         # Group results by book to get counts
         books = {}
         total_matches = len(results)
+        if progress_info.get("accumulated_matches") is not None:
+            total_matches = max(total_matches, int(progress_info["accumulated_matches"]))
         for result in results:
             book_title = result['book_title']
             if book_title not in books:
@@ -573,11 +667,19 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
         
         # Combined progress and results summary
         match_text = f"{total_matches:,} matches in {len(books)} books so far" if total_matches > 0 else "No matches yet"
-        
+        sub_detached = (
+            f"{progress_bar} {current_book} — search runs in the background (nohup); "
+            "reopen !!ksearch with the same query to refresh, or wait for the macOS notification."
+            if progress_info.get("detached")
+            else (
+                f"{progress_bar} Currently searching: {current_book} — leave Alfred open; "
+                "each refresh scans one more book (sync mode)"
+            )
+        )
         alfred_items.append({
             "uid": "progress",
             "title": f"🔍 Searching ({processed}/{total}) • {match_text}",
-            "subtitle": f"{progress_bar} Currently searching: {current_book} — 💤 you can close Alfred and come back in a few minutes",
+            "subtitle": sub_detached,
             "icon": {"path": "icon.png"},
             "valid": False
         })
@@ -614,10 +716,20 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
 
     # Summary row first
     if progress_info and progress_info.get('is_complete', False):
+        is_cached = bool(progress_info.get("cached"))
+        cache_age = _humanize_age_seconds(progress_info.get("cache_age_seconds"))
+        cache_suffix = f" • cached {cache_age} ago" if is_cached and cache_age else ""
         alfred_items.append({
             "uid": "aaaa-summary",
-            "title": f"🔍 Search Results for '{search_text}'",
-            "subtitle": f"Found {total_matches:,} total matches across {total_books} book{'s' if total_books != 1 else ''}",
+            "title": (
+                f"🗄️ 🔍 Search Results for '{search_text}'"
+                if is_cached
+                else f"🔍 Search Results for '{search_text}'"
+            ),
+            "subtitle": (
+                f"Found {total_matches:,} total matches across {total_books} "
+                f"book{'s' if total_books != 1 else ''}{cache_suffix}"
+            ),
             "icon": {"path": "icon.png"},
             "valid": False,
         })
@@ -642,6 +754,7 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
                 "book_title": book_title,
                 "search_term": search_text,
                 "book_filename": book_results[0].get('book_filename', ''),
+                "epub_path": book_results[0].get('epub_path', ''),
                 "match_count": str(match_count),
                 "sample_context": sample_context
             }
@@ -996,6 +1109,8 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
 
                     book_results.append({
                         "book_title": book_title,
+                        "book_filename": os.path.basename(epub_path),
+                        "epub_path": os.path.abspath(epub_path),
                         "chapter": chapter_title,
                         "match": match_label,
                         "context": context_text,
@@ -1031,21 +1146,486 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
         return []
 
 
+def _env_truthy(name):
+    raw = (os.environ.get(name) or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def _alfred_bg_jobs_dir():
+    try:
+        from config import CACHE_FOLDER
+    except Exception:
+        CACHE_FOLDER = tempfile.gettempdir()
+    d = os.path.join(CACHE_FOLDER, "epub_search", "bg_jobs")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _alfred_bg_job_id(folder_cache_token, search_text, context_words, proximity_distance):
+    key = f"{folder_cache_token}\x1f{search_text}\x1f{context_words}\x1f{proximity_distance}"
+    return hashlib.md5(key.encode("utf-8")).hexdigest()[:16]
+
+
+def _atomic_write_json(path, obj):
+    d = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".epubbg_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(obj, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _read_json_if_exists(path):
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _pid_is_alive(pid):
+    if not pid or int(pid) <= 0:
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except OSError:
+        return False
+    return True
+
+
+def _alfred_search_notify(title, text):
+    safe_title = (title or "").replace("\\", "\\\\").replace('"', '\\"')
+    safe_text = str(text or "").replace("\\", "\\\\").replace('"', '\\"')
+    try:
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display notification "{safe_text}" with title "{safe_title}"',
+            ],
+            check=False,
+            capture_output=True,
+        )
+    except Exception:
+        pass
+
+
+def _spawn_nohup_alfred_bg_worker(job_path):
+    """Detach a full-library scan; survives Alfred window closing (nohup + new session)."""
+    wd = os.path.dirname(os.path.abspath(__file__))
+    log_path = job_path.replace(".job.json", ".log")
+    py = sys.executable
+    script = os.path.join(wd, "searchEPUB.py")
+    lib = os.path.join(wd, "lib")
+    pp = lib if os.path.isdir(lib) else (os.environ.get("PYTHONPATH") or "")
+    cmd = (
+        f"cd {shlex.quote(wd)} && "
+        f"export PYTHONPATH={shlex.quote(pp)} && "
+        f"nohup {shlex.quote(py)} -u {shlex.quote(script)} "
+        f"--alfred-bg-worker {shlex.quote(job_path)} "
+        f">> {shlex.quote(log_path)} 2>&1 &"
+    )
+    subprocess.run(
+        ["/bin/bash", "-c", cmd],
+        env=os.environ.copy(),
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+
+
+def run_alfred_bg_worker(job_path):
+    """
+    Entry point for `nohup … searchEPUB.py --alfred-bg-worker <job.json>`.
+    Scans the whole EPUB list, updates status JSON for Alfred polling, then
+    writes the same results cache used for drill-down.
+    """
+    job = _read_json_if_exists(job_path)
+    if not job:
+        return 1
+    search_text = job.get("search_text") or ""
+    folder_arg = job.get("folder_arg") or ""
+    context_words = int(job.get("context_words") or 10)
+    proximity_distance = int(job.get("proximity_distance") or 100)
+    create_modified_epubs = bool(job.get("create_modified_epubs"))
+
+    roots = resolve_epub_scan_roots(folder_arg)
+    folder_cache_token = epub_scan_cache_token(roots)
+    epub_files = _collect_epub_paths_deduped_across_roots(roots)
+    status_path = job_path.replace(".job.json", ".status.json")
+    cache_file = _search_cache_path(search_text, folder_cache_token)
+    total = len(epub_files)
+
+    def write_status(**kwargs):
+        base = {
+            "phase": "running",
+            "pid": os.getpid(),
+            "processed": 0,
+            "total": total,
+            "current_book": "",
+            "accumulated_matches": 0,
+            "updated": time.time(),
+        }
+        base.update(kwargs)
+        _atomic_write_json(status_path, base)
+
+    try:
+        write_status(
+            phase="running",
+            processed=0,
+            current_book="Starting library scan…",
+        )
+        results = []
+        for idx, epub_path in enumerate(epub_files):
+            title = get_book_title_from_epub(epub_path)
+            try:
+                chunk = search_single_epub(
+                    epub_path,
+                    search_text,
+                    context_words,
+                    create_modified_epubs,
+                    quiet=True,
+                    proximity_distance=proximity_distance,
+                )
+                if chunk:
+                    results.extend(chunk)
+            except Exception:
+                pass
+            write_status(
+                phase="running",
+                processed=idx + 1,
+                current_book=title,
+                accumulated_matches=len(results),
+            )
+
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "search_text": search_text,
+                    "folder_path": folder_cache_token,
+                    "scan_roots": roots,
+                    "results": results,
+                },
+                f,
+            )
+
+        _atomic_write_json(
+            status_path,
+            {
+                "phase": "complete",
+                "pid": os.getpid(),
+                "processed": total,
+                "total": total,
+                "current_book": "Complete",
+                "accumulated_matches": len(results),
+                "updated": time.time(),
+            },
+        )
+        books_n = len({r.get("book_title") for r in results}) if results else 0
+        _alfred_search_notify(
+            "eBooks search finished",
+            f'"{search_text}" — {len(results):,} hits in {books_n} book(s). Open !!ksearch with the same query to browse.',
+        )
+        return 0
+    except Exception as e:
+        _atomic_write_json(
+            status_path,
+            {
+                "phase": "error",
+                "pid": os.getpid(),
+                "processed": 0,
+                "total": total,
+                "current_book": "",
+                "accumulated_matches": 0,
+                "error": str(e),
+                "updated": time.time(),
+            },
+        )
+        _alfred_search_notify("eBooks search failed", str(e)[:180])
+        return 1
+
+
+def _search_with_alfred_progress_sync(
+    folder_path,
+    search_text,
+    context_words,
+    create_modified_epubs,
+    proximity_distance,
+    roots,
+    folder_cache_token,
+    epub_files,
+):
+    """Original one-book-per-Alfred-invocation incremental search (opt-in via env)."""
+    cache_file = _search_cache_path(search_text, folder_cache_token)
+    state_key = f"{folder_cache_token}_{search_text}_{context_words}"
+    state_hash = hashlib.md5(state_key.encode()).hexdigest()[:8]
+    state_file = os.path.join(tempfile.gettempdir(), f"alfred_epub_search_{state_hash}.json")
+
+    total_files = len(epub_files)
+
+    if os.path.exists(state_file):
+        try:
+            with open(state_file, "r", encoding="utf-8") as f:
+                state = json.load(f)
+        except Exception:
+            state = {"processed": 0, "results": [], "complete": False}
+    else:
+        state = {"processed": 0, "results": [], "complete": False}
+
+    if state["complete"] or state["processed"] >= total_files:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "search_text": search_text,
+                    "folder_path": folder_cache_token,
+                    "scan_roots": roots,
+                    "results": state["results"],
+                },
+                f,
+            )
+        if os.path.exists(state_file):
+            os.remove(state_file)
+        progress_info = {
+            "processed_books": total_files,
+            "total_books": total_files,
+            "current_book": "Complete",
+            "is_complete": True,
+        }
+        json_output = export_alfred_books_overview(state["results"], search_text, progress_info)
+        sys.stdout.write(json_output + "\n")
+        sys.stdout.flush()
+        return state["results"]
+
+    current_index = state["processed"]
+    current_book_title = "Complete"
+    if current_index < total_files:
+        epub_path = epub_files[current_index]
+        current_book_title = get_book_title_from_epub(epub_path)
+        try:
+            book_results = search_single_epub(
+                epub_path,
+                search_text,
+                context_words,
+                create_modified_epubs,
+                quiet=True,
+                proximity_distance=proximity_distance,
+            )
+            if book_results:
+                state["results"].extend(book_results)
+        except Exception:
+            pass
+        state["processed"] = current_index + 1
+        state["complete"] = state["processed"] >= total_files
+        with open(state_file, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+
+    progress_info = {
+        "processed_books": state["processed"],
+        "total_books": total_files,
+        "current_book": current_book_title,
+        "is_complete": state["complete"],
+    }
+    json_output = export_alfred_books_overview(state["results"], search_text, progress_info)
+    sys.stdout.write(json_output + "\n")
+    sys.stdout.flush()
+    return state["results"]
+
+
+def _search_with_alfred_progress_background(
+    folder_path,
+    search_text,
+    context_words,
+    create_modified_epubs,
+    proximity_distance,
+    roots,
+    folder_cache_token,
+    cache_file,
+    epub_files,
+):
+    """Spawn nohup worker + poll status; closing Alfred does not stop the worker."""
+    job_id = _alfred_bg_job_id(
+        folder_cache_token, search_text, context_words, proximity_distance
+    )
+    bg_dir = _alfred_bg_jobs_dir()
+    job_path = os.path.join(bg_dir, f"{job_id}.job.json")
+    status_path = os.path.join(bg_dir, f"{job_id}.status.json")
+
+    def emit_from_cache():
+        cache_age_seconds = max(0, time.time() - os.path.getmtime(cache_file))
+        with open(cache_file, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+        results = cached.get("results", [])
+        total_books = len({r["book_title"] for r in results}) if results else 0
+        progress_info = {
+            "processed_books": total_books,
+            "total_books": total_books,
+            "current_book": "Complete",
+            "is_complete": True,
+            "cached": True,
+            "cache_age_seconds": cache_age_seconds,
+        }
+        json_output = export_alfred_books_overview(results, search_text, progress_info)
+        sys.stdout.write(json_output + "\n")
+        sys.stdout.flush()
+        return results
+
+    def emit_poll(st):
+        phase = (st or {}).get("phase") or ""
+        if phase == "error":
+            err = (st or {}).get("error") or "Unknown error"
+            err_json = {
+                "items": [
+                    {
+                        "uid": "bg-error",
+                        "title": "Search failed (background worker)",
+                        "subtitle": err[:200],
+                        "icon": {"path": "icons/Warning.png"},
+                        "valid": False,
+                    }
+                ],
+                "skipknowledge": True,
+            }
+            sys.stdout.write(json.dumps(err_json, indent=2, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
+            return []
+
+        processed = int((st or {}).get("processed") or 0)
+        total = int((st or {}).get("total") or 1)
+        current_book = (st or {}).get("current_book") or "…"
+        acc = (st or {}).get("accumulated_matches")
+        if acc is None:
+            acc = 0
+        progress_info = {
+            "processed_books": processed,
+            "total_books": total,
+            "current_book": current_book,
+            "is_complete": False,
+            "accumulated_matches": int(acc),
+            "detached": True,
+        }
+        json_output = export_alfred_books_overview([], search_text, progress_info)
+        sys.stdout.write(json_output + "\n")
+        sys.stdout.flush()
+        return []
+
+    if os.path.exists(cache_file):
+        try:
+            return emit_from_cache()
+        except Exception:
+            pass
+
+    st = _read_json_if_exists(status_path)
+    if st and st.get("phase") == "running":
+        pid = int(st.get("pid") or 0)
+        updated = float(st.get("updated") or 0)
+        age = time.time() - updated
+        if pid > 0 and _pid_is_alive(pid):
+            return emit_poll(st)
+        if pid == 0 and age < 120:
+            return emit_poll(st)
+        try:
+            os.unlink(status_path)
+        except OSError:
+            pass
+        st = None
+
+    if st and st.get("phase") == "complete" and os.path.exists(cache_file):
+        return emit_from_cache()
+
+    try:
+        import fcntl
+    except ImportError:
+        fcntl = None
+
+    job_payload = {
+        "folder_arg": folder_path,
+        "search_text": search_text,
+        "context_words": context_words,
+        "proximity_distance": proximity_distance,
+        "create_modified_epubs": create_modified_epubs,
+    }
+    _atomic_write_json(job_path, job_payload)
+
+    lock_path = os.path.join(bg_dir, ".spawn_lock")
+    if fcntl:
+        with open(lock_path, "a+", encoding="utf-8") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            try:
+                st2 = _read_json_if_exists(status_path)
+                if st2 and st2.get("phase") == "running":
+                    pid2 = int(st2.get("pid") or 0)
+                    if pid2 > 0 and _pid_is_alive(pid2):
+                        return emit_poll(st2)
+                    if pid2 == 0 and (time.time() - float(st2.get("updated") or 0)) < 120:
+                        return emit_poll(st2)
+                    try:
+                        os.unlink(status_path)
+                    except OSError:
+                        pass
+
+                _atomic_write_json(
+                    status_path,
+                    {
+                        "phase": "running",
+                        "pid": 0,
+                        "processed": 0,
+                        "total": len(epub_files),
+                        "current_book": "Starting background worker…",
+                        "accumulated_matches": 0,
+                        "updated": time.time(),
+                    },
+                )
+                _spawn_nohup_alfred_bg_worker(job_path)
+            finally:
+                fcntl.flock(lk, fcntl.LOCK_UN)
+    else:
+        _atomic_write_json(
+            status_path,
+            {
+                "phase": "running",
+                "pid": 0,
+                "processed": 0,
+                "total": len(epub_files),
+                "current_book": "Starting background worker…",
+                "accumulated_matches": 0,
+                "updated": time.time(),
+            },
+        )
+        _spawn_nohup_alfred_bg_worker(job_path)
+
+    time.sleep(0.12)
+    st3 = _read_json_if_exists(status_path)
+    if os.path.exists(cache_file):
+        try:
+            return emit_from_cache()
+        except Exception:
+            pass
+    return emit_poll(st3 or {"phase": "running", "processed": 0, "total": len(epub_files), "current_book": "Starting…", "accumulated_matches": 0})
+
+
 def search_with_alfred_progress(folder_path, search_text, context_words=10, create_modified_epubs=True, proximity_distance=100):
     """
-    Search multiple EPUB files with stateful Alfred JSON progress updates.
-    
-    This function uses a temp file to track progress and outputs only ONE JSON 
-    response per execution, relying on Alfred's rerun to call again.
+    Alfred library search: serves warm cache, otherwise either a detached
+    nohup worker (default) or the legacy one-book-per-invocation mode when
+    EPUB_SEARCH_ALFRED_SYNC=1.
     """
     _cache_days = _env_positive_int('SEARCH_CACHE_DAYS') or 11
     _CACHE_MAX_AGE = _cache_days * 86400
 
-    # Expand tilde in folder path
-    folder_path = os.path.expanduser(folder_path)
+    roots = resolve_epub_scan_roots(folder_path)
+    folder_cache_token = epub_scan_cache_token(roots)
 
     # Return cached results if fresh enough
-    cache_file = _search_cache_path(search_text, folder_path)
+    cache_file = _search_cache_path(search_text, folder_cache_token)
     if os.path.exists(cache_file):
         age = time.time() - os.path.getmtime(cache_file)
         if age < _CACHE_MAX_AGE:
@@ -1058,110 +1638,46 @@ def search_with_alfred_progress(folder_path, search_text, context_words=10, crea
                 'total_books': total_books,
                 'current_book': 'Complete',
                 'is_complete': True,
+                'cached': True,
+                'cache_age_seconds': age,
             }
             json_output = export_alfred_books_overview(results, search_text, progress_info)
             sys.stdout.write(json_output + '\n')
             sys.stdout.flush()
             return results
 
-    # Create unique state file based on search parameters
-    state_key = f"{folder_path}_{search_text}_{context_words}"
-    state_hash = hashlib.md5(state_key.encode()).hexdigest()[:8]
-    state_file = os.path.join(tempfile.gettempdir(), f"alfred_epub_search_{state_hash}.json")
+    epub_files = _collect_epub_paths_deduped_across_roots(roots)
 
-    # Find all EPUB files
-    epub_files = []
-    if os.path.exists(folder_path):
-        for item in os.listdir(folder_path):
-            item_path = os.path.join(folder_path, item)
-            if item.lower().endswith('.epub'):
-                epub_files.append(item_path)
-    
     if not epub_files:
-        # Clean up any existing state file
-        if os.path.exists(state_file):
-            os.remove(state_file)
-        # Output no files found JSON
         progress_info = {'is_complete': True, 'processed_books': 0, 'total_books': 0}
         json_output = export_alfred_books_overview([], search_text, progress_info)
         sys.stdout.write(json_output + '\n')
         sys.stdout.flush()
         return []
-    
-    total_files = len(epub_files)
-    
-    # Load or initialize state
-    if os.path.exists(state_file):
-        try:
-            with open(state_file, 'r') as f:
-                state = json.load(f)
-        except:
-            state = {'processed': 0, 'results': [], 'complete': False}
-    else:
-        state = {'processed': 0, 'results': [], 'complete': False}
-    
-    # If search is complete, show final results
-    if state['complete'] or state['processed'] >= total_files:
-        # Persist results for drill-down before cleaning up temp state
-        cache_file = _search_cache_path(search_text, folder_path)
-        with open(cache_file, 'w') as f:
-            json.dump({
-                'search_text': search_text,
-                'folder_path': folder_path,
-                'results': state['results'],
-            }, f)
 
-        if os.path.exists(state_file):
-            os.remove(state_file)
+    if _env_truthy("EPUB_SEARCH_ALFRED_SYNC"):
+        return _search_with_alfred_progress_sync(
+            folder_path,
+            search_text,
+            context_words,
+            create_modified_epubs,
+            proximity_distance,
+            roots,
+            folder_cache_token,
+            epub_files,
+        )
 
-        progress_info = {
-            'processed_books': total_files,
-            'total_books': total_files,
-            'current_book': 'Complete',
-            'is_complete': True
-        }
-        json_output = export_alfred_books_overview(state['results'], search_text, progress_info)
-        sys.stdout.write(json_output + '\n')
-        sys.stdout.flush()
-        return state['results']
-    
-    # Process next book
-    current_index = state['processed']
-    current_book_title = 'Complete'
-    if current_index < total_files:
-        epub_path = epub_files[current_index]
-        current_book_title = get_book_title_from_epub(epub_path)
-        
-        # Search this book
-        try:
-            book_results = search_single_epub(epub_path, search_text, context_words, create_modified_epubs, quiet=True, proximity_distance=proximity_distance)
-            if book_results:
-                state['results'].extend(book_results)
-        except Exception as e:
-            # Continue on error but don't add results
-            pass
-        
-        # Update state
-        state['processed'] = current_index + 1
-        state['complete'] = (state['processed'] >= total_files)
-        
-        # Save state
-        with open(state_file, 'w') as f:
-            json.dump(state, f)
-    
-    # Output current progress
-    progress_info = {
-        'processed_books': state['processed'],
-        'total_books': total_files,
-        'current_book': current_book_title,
-        'is_complete': state['complete']
-    }
-    
-    json_output = export_alfred_books_overview(state['results'], search_text, progress_info)
-    sys.stdout.write(json_output + '\n')
-    sys.stdout.flush()
-    
-    return state['results']
+    return _search_with_alfred_progress_background(
+        folder_path,
+        search_text,
+        context_words,
+        create_modified_epubs,
+        proximity_distance,
+        roots,
+        folder_cache_token,
+        cache_file,
+        epub_files,
+    )
 
 
 def get_book_title_from_epub(epub_path):
@@ -1330,6 +1846,28 @@ def _env_positive_int(*names):
     return None
 
 
+def _humanize_age_seconds(age_seconds):
+    """Compact human-readable age string for cache metadata."""
+    if age_seconds is None:
+        return ""
+    try:
+        seconds = int(max(0, age_seconds))
+    except (TypeError, ValueError):
+        return ""
+
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        hours = seconds // 3600
+        mins = (seconds % 3600) // 60
+        return f"{hours}h" if mins == 0 else f"{hours}h {mins}m"
+    days = seconds // 86400
+    hours = (seconds % 86400) // 3600
+    return f"{days}d" if hours == 0 else f"{days}d {hours}h"
+
+
 def _search_cache_path(search_text, folder_path):
     """Return a persistent cache file path for a folder search."""
     try:
@@ -1341,6 +1879,102 @@ def _search_cache_path(search_text, folder_path):
     key = f"{os.path.expanduser(folder_path)}_{search_text}"
     h = hashlib.md5(key.encode()).hexdigest()[:12]
     return os.path.join(cache_dir, f"search_{h}.json")
+
+
+def _search_cache_dir():
+    """Return persistent cache directory for folder searches."""
+    try:
+        from config import CACHE_FOLDER
+    except Exception:
+        CACHE_FOLDER = tempfile.gettempdir()
+    cache_dir = os.path.join(CACHE_FOLDER, "epub_search")
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
+def export_alfred_cached_searches_index():
+    """
+    List cached folder-search summaries for empty-query Alfred mode.
+
+    Each row autocompletes to the original query so the user can quickly
+    rerun and open the cached/full results for that search term.
+    """
+    cache_dir = _search_cache_dir()
+    cache_files = sorted(
+        glob.glob(os.path.join(cache_dir, "search_*.json")),
+        key=lambda p: os.path.getmtime(p),
+        reverse=True,
+    )
+
+    items = [{
+        "uid": "cached-searches-header",
+        "title": "🗄️ Cached EPUB searches",
+        "subtitle": "Select a cached query (Tab) to rerun and open results",
+        "icon": {"path": "icon.png"},
+        "valid": False,
+    }]
+
+    for cache_path in cache_files:
+        cached = _read_json_if_exists(cache_path)
+        if not cached:
+            continue
+        cache_file_name = os.path.basename(cache_path)
+        cache_id = ""
+        if cache_file_name.startswith("search_") and cache_file_name.endswith(".json"):
+            cache_id = cache_file_name[len("search_"):-len(".json")]
+        query = (cached.get("search_text") or "").strip()
+        if not query:
+            continue
+        results = cached.get("results") or []
+        total_matches = len(results)
+        total_books = len({r.get("book_title") for r in results if r.get("book_title")})
+        age_s = max(0, time.time() - os.path.getmtime(cache_path))
+        age_label = _humanize_age_seconds(age_s) or "0s"
+
+        scan_roots = cached.get("scan_roots") or []
+        roots_text = (
+            f" • {len(scan_roots)} location{'s' if len(scan_roots) != 1 else ''}"
+            if isinstance(scan_roots, list) and scan_roots
+            else ""
+        )
+
+        items.append({
+            "uid": f"cached-{cache_id or hashlib.md5(cache_path.encode('utf-8')).hexdigest()[:12]}",
+            "title": f"🗄️ {query}",
+            "subtitle": (
+                f"{total_matches:,} matches across {total_books} "
+                f"book{'s' if total_books != 1 else ''} • cached {age_label} ago{roots_text}"
+            ),
+            "icon": {"path": "icon.png"},
+            "valid": False,
+            "autocomplete": query,
+            "mods": {
+                "cmd+alt+ctrl": {
+                    "valid": bool(cache_id),
+                    "subtitle": (
+                        f"Delete this cached search (ID: {cache_id})"
+                        if cache_id
+                        else "Delete unavailable: missing cache ID"
+                    ),
+                    "arg": cache_id,
+                    "variables": {
+                        "action": "delete_cached_search",
+                        "cache_id": cache_id,
+                    },
+                }
+            },
+        })
+
+    if len(items) == 1:
+        items.append({
+            "uid": "cached-searches-empty",
+            "title": "No cached searches yet",
+            "subtitle": "Run a library search once, then reopen with an empty query",
+            "icon": {"path": "icons/Warning.png"},
+            "valid": False,
+        })
+
+    return json.dumps({"items": items, "skipknowledge": True}, indent=2, ensure_ascii=False)
 
 
 def _is_unpacked_epub_dir(path):
@@ -1405,8 +2039,10 @@ def main():
         drill_book = os.environ.get('book_title', '')
         drill_search = os.environ.get('search_term', '')
         folder_path = os.path.expanduser(args['--folder'])
+        roots = resolve_epub_scan_roots(args['--folder'])
+        folder_cache_token = epub_scan_cache_token(roots) or folder_path
 
-        cache_file = _search_cache_path(drill_search, folder_path)
+        cache_file = _search_cache_path(drill_search, folder_cache_token)
         if os.path.exists(cache_file):
             with open(cache_file, 'r') as f:
                 cached = json.load(f)
@@ -1416,11 +2052,19 @@ def main():
             ]
             book_filename = os.environ.get('book_filename', '')
             book_open_arg = ""
-            if book_filename:
-                parsed = parse_book_input(
-                    os.path.join(folder_path, book_filename)
-                )
-                book_open_arg = parsed["open_arg"]
+            epub_path_env = (os.environ.get('epub_path') or '').strip()
+            if epub_path_env:
+                book_open_arg = parse_book_input(epub_path_env)["open_arg"]
+            elif book_filename:
+                for root in roots:
+                    candidate = os.path.join(root, book_filename)
+                    if os.path.isfile(candidate) or os.path.isdir(candidate):
+                        book_open_arg = parse_book_input(candidate)["open_arg"]
+                        break
+                if not book_open_arg:
+                    legacy = os.path.join(folder_path, book_filename)
+                    if os.path.isfile(legacy) or os.path.isdir(legacy):
+                        book_open_arg = parse_book_input(legacy)["open_arg"]
             context_words = (
                 _env_positive_int('SEARCH_CONTEXT_WORDS', 'context_words')
                 or int(args['--context'])
@@ -1452,22 +2096,29 @@ def main():
         args['<search_text>'] = original_search
         search_text = original_search
         
-        # Find the book file by title
+        # Find the book file by title (scan every resolved Apple root, if any)
         folder_path = os.path.expanduser(args['--folder'])
         target_book_path = None
-        
-        if os.path.exists(folder_path):
-            for item in os.listdir(folder_path):
-                item_path = os.path.join(folder_path, item)
+        scan_dirs = resolve_epub_scan_roots(args['--folder'])
+        if not scan_dirs and os.path.isdir(folder_path):
+            scan_dirs = [folder_path]
+
+        for scan_dir in scan_dirs:
+            if not os.path.isdir(scan_dir):
+                continue
+            for item in os.listdir(scan_dir):
+                item_path = os.path.join(scan_dir, item)
                 if item.lower().endswith('.epub'):
                     try:
                         actual_title = get_book_title_from_epub(item_path)
                         if actual_title == book_title:
                             target_book_path = item_path
                             break
-                    except:
+                    except Exception:
                         continue
-        
+            if target_book_path:
+                break
+
         if target_book_path:
             args['--book'] = target_book_path
         else:
@@ -1484,6 +2135,16 @@ def main():
                 }
                 print(json.dumps(error_json, indent=2))
                 return 1
+
+    # Empty-query Alfred UX: show cached search summaries instead of running
+    # a blank full-text scan.
+    if (
+        bool(args.get('--alfred'))
+        and not (args.get('--book') or '').strip()
+        and not (search_text or '').strip()
+    ):
+        print(export_alfred_cached_searches_index())
+        return 0
     
     # Parse arguments
     # Workflow-configurable search tuning (set from Alfred's workflow
@@ -1600,8 +2261,10 @@ def main():
         if not output_file and create_markdown:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             safe_search_text = re.sub(r"[^\w\s-]", "", search_text).replace(" ", "_")
+            roots_out = resolve_epub_scan_roots(folder_path)
+            out_base = roots_out[0] if roots_out else os.path.expanduser(folder_path)
             output_file = os.path.join(
-                os.path.expanduser(folder_path), f"search_{safe_search_text}_{timestamp}.md"
+                out_base, f"search_{safe_search_text}_{timestamp}.md"
             )
     
     # Export results based on format requested
@@ -1632,4 +2295,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) >= 3 and sys.argv[1] == "--alfred-bg-worker":
+        sys.exit(run_alfred_bg_worker(sys.argv[2]))
     sys.exit(main())
