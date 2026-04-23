@@ -77,11 +77,21 @@
 				<key>modifiersubtext</key>
 				<string></string>
 				<key>vitoclose</key>
-				<false/>
+				<true/>
 			</dict>
 		</array>
 		<key>411D762D-9800-4DD4-B932-290515091AE4</key>
 		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>5330E514-8491-49F5-98D8-DED98E264BC1</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
 			<dict>
 				<key>destinationuid</key>
 				<string>27394D31-A067-4505-96AC-05D84162CDA0</string>
@@ -127,6 +137,8 @@
 				<integer>0</integer>
 				<key>modifiersubtext</key>
 				<string></string>
+				<key>sourceoutputuid</key>
+				<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -137,8 +149,6 @@
 				<integer>0</integer>
 				<key>modifiersubtext</key>
 				<string></string>
-				<key>sourceoutputuid</key>
-				<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -216,6 +226,8 @@
 				<false/>
 			</dict>
 		</array>
+		<key>F34BF854-B8DB-443D-9246-FBE0F078BCE9</key>
+		<array/>
 	</dict>
 	<key>createdby</key>
 	<string>giovanni</string>
@@ -524,6 +536,56 @@ fi</string>
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>2</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>1111</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string></string>
+				<key>script</key>
+				<string>export PYTHONPATH="$PWD/lib"
+/usr/bin/python3 searchEPUB.py "text view" --alfred</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string>troubleshooting seaarch</string>
+				<key>type</key>
+				<integer>11</integer>
+				<key>withspace</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>F34BF854-B8DB-443D-9246-FBE0F078BCE9</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>argument</key>
 				<string></string>
 				<key>passthroughargument</key>
@@ -595,7 +657,7 @@ fi</string>
 				<key>alfredfiltersresultsmatchmode</key>
 				<integer>0</integer>
 				<key>argumenttreatemptyqueryasnil</key>
-				<true/>
+				<false/>
 				<key>argumenttrimmode</key>
 				<integer>0</integer>
 				<key>argumenttype</key>
@@ -607,13 +669,13 @@ fi</string>
 				<key>queuedelaycustom</key>
 				<integer>3</integer>
 				<key>queuedelayimmediatelyinitially</key>
-				<false/>
+				<true/>
 				<key>queuedelaymode</key>
-				<integer>1</integer>
+				<integer>0</integer>
 				<key>queuemode</key>
 				<integer>1</integer>
 				<key>runningsubtext</key>
-				<string>⏳...fetching Kindle info...</string>
+				<string>🔍 Searching your library… please wait</string>
 				<key>script</key>
 				<string>export PYTHONPATH="$PWD/lib"
 /usr/bin/python3 searchEPUB.py "$1" --book="$curr_book" --alfred
@@ -625,7 +687,7 @@ fi</string>
 				<key>subtext</key>
 				<string></string>
 				<key>title</key>
-				<string>searching... 📚</string>
+				<string>search your eBook library... 📚</string>
 				<key>type</key>
 				<integer>5</integer>
 				<key>withspace</key>
@@ -655,7 +717,7 @@ fi</string>
 				<key>argumenttrimmode</key>
 				<integer>0</integer>
 				<key>argumenttype</key>
-				<integer>2</integer>
+				<integer>1</integer>
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>keyword</key>
@@ -1062,6 +1124,13 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<real>280</real>
 			<key>ypos</key>
 			<real>135</real>
+		</dict>
+		<key>F34BF854-B8DB-443D-9246-FBE0F078BCE9</key>
+		<dict>
+			<key>xpos</key>
+			<real>1485</real>
+			<key>ypos</key>
+			<real>255</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>

@@ -32,6 +32,9 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 
 ### Version 0.3
 
+- **Typing guard for library-wide search** — `!!ksearch` no longer fires an expensive full-library scan on every keystroke. Instead it shows a mirror row reflecting your query, with cached searches listed below. Press ↵ to confirm, and a live progress bar tracks the scan. Cached searches are directly actionable — press ↵ to reopen their results instantly.
+- **Live progress bar via fresh-session reopen** — when a search is confirmed, the workflow spawns a background worker and reopens Alfred as a fresh session so the progress bar updates in real time (workaround for Alfred's `rerun` limitation with text in the search box).
+- **Improved progress grammar** — progress text now correctly says "1 match in 1 book" instead of "1 matches in 0 books".
 - **Graceful handling of missing resources** — if a user enables a library source (Kindle, Apple Books, Yomu, Calibre) that isn't installed, the workflow logs a clear message and skips it instead of crashing.
 - **`⌃` modifier shows searchability** — holding ctrl on any book row now shows whether full-text search is available for that book, with a specific reason when it isn't (e.g. "Kindle books aren't searchable locally", "the .epub file isn't on disk").
 - **Multi-book search drill-down** — folder-wide EPUB searches now show a book overview sorted by match count; pressing ↩ on a book drills into its individual matches instantly (served from cache, no re-scanning).
@@ -146,7 +149,7 @@ Highlights of the v0.2 dev-branch work (full details in [whatsnew.md](whatsnew.m
 
 <h1 id="changelog">Changelog 🧰</h1>
 
-- 04-22-2026: version 0.3: search caching, drill-down, graceful error handling
+- 04-23-2026: version 0.3: typing guard, live progress bar, search caching, drill-down, graceful error handling
 - 10-07-2024: version 0.2: from kindle to eBooks
 - 02-28-2023: version 0.1
 

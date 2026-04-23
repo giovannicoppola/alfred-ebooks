@@ -13,7 +13,7 @@ FEATURES:
   • Alfred workflow integration with drill-down functionality
 
 Usage:
-  searchEPUB.py <search_text> [--folder=<path>] [--book=<file>] [--context=<n>] [--output=<file>] [--proximity=<n>] [--epub] [--markdown] [--group] [--alfred]
+  searchEPUB.py [<search_text>] [--folder=<path>] [--book=<file>] [--context=<n>] [--output=<file>] [--proximity=<n>] [--epub] [--markdown] [--group] [--alfred]
   searchEPUB.py -h | --help
   searchEPUB.py --version
 
@@ -666,7 +666,15 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
             books[book_title].append(result)
         
         # Combined progress and results summary
-        match_text = f"{total_matches:,} matches in {len(books)} books so far" if total_matches > 0 else "No matches yet"
+        if total_matches > 0:
+            match_s = "match" if total_matches == 1 else "matches"
+            if len(books) > 0:
+                book_s = "book" if len(books) == 1 else "books"
+                match_text = f"{total_matches:,} {match_s} in {len(books)} {book_s} so far"
+            else:
+                match_text = f"{total_matches:,} {match_s} so far"
+        else:
+            match_text = "No matches yet"
         sub_detached = (
             f"{progress_bar} {current_book} — search runs in the background (nohup); "
             "reopen !!ksearch with the same query to refresh, or wait for the macOS notification."
@@ -1892,6 +1900,60 @@ def _search_cache_dir():
     return cache_dir
 
 
+_RUN_PREFIX = "!!RUN "
+
+
+def _build_typing_guard_json(search_text, book_path=None):
+    """Build Alfred JSON for the typing guard: mirror row + cached searches."""
+    items = []
+
+    if search_text.strip():
+        if book_path:
+            raw_name = os.path.splitext(os.path.basename(book_path.rstrip("/")))[0]
+            if raw_name.isdigit():
+                try:
+                    book_title = get_book_title_from_epub(book_path)
+                except Exception:
+                    book_title = raw_name
+            else:
+                book_title = raw_name
+            items.append({
+                "uid": "typing-guard-run",
+                "title": f"🔍 Search: {search_text}",
+                "subtitle": f"Press Enter to search '{book_title}'",
+                "icon": {"path": "icon.png"},
+                "arg": search_text,
+                "valid": True,
+            })
+        else:
+            items.append({
+                "uid": "typing-guard-run",
+                "title": f"🔍 Search: {search_text}",
+                "subtitle": "Press ↵ to search your entire library",
+                "icon": {"path": "icon.png"},
+                "arg": f"{_RUN_PREFIX}{search_text}",
+                "valid": True,
+            })
+    else:
+        items.append({
+            "uid": "typing-guard-hint",
+            "title": "Type a search term…",
+            "subtitle": "Results appear after you press Enter",
+            "icon": {"path": "icon.png"},
+            "valid": False,
+        })
+
+    if not book_path:
+        cached_json = json.loads(export_alfred_cached_searches_index())
+        cached_items = cached_json.get("items", [])
+        for it in cached_items:
+            if it.get("uid") == "cached-searches-header":
+                continue
+            items.append(it)
+
+    return json.dumps({"items": items, "skipknowledge": True}, indent=2, ensure_ascii=False)
+
+
 def export_alfred_cached_searches_index():
     """
     List cached folder-search summaries for empty-query Alfred mode.
@@ -1947,7 +2009,7 @@ def export_alfred_cached_searches_index():
             ),
             "icon": {"path": "icon.png"},
             "valid": False,
-            "autocomplete": query,
+            "autocomplete": f"{_RUN_PREFIX}{query}",
             "mods": {
                 "cmd+alt+ctrl": {
                     "valid": bool(cache_id),
@@ -2030,7 +2092,7 @@ def parse_book_input(book_input):
 def main():
     """Main function to handle command line arguments"""
     args = docopt(__doc__, version='EPUB Search Tool 1.0')
-    
+
     search_text = args['<search_text>']
 
     # ---- Drill-down: user actioned a book row from the folder overview.
@@ -2136,15 +2198,133 @@ def main():
                 print(json.dumps(error_json, indent=2))
                 return 1
 
-    # Empty-query Alfred UX: show cached search summaries instead of running
-    # a blank full-text scan.
+    # ---- Alfred typing guard for all-library search ----
+    # Detect !!RUN prefix: user confirmed the search via Enter.
+    # Strip prefix and let the search proceed (spawns bg worker + progress).
+    _is_run_confirmed = False
     if (
         bool(args.get('--alfred'))
         and not (args.get('--book') or '').strip()
-        and not (search_text or '').strip()
+        and (search_text or '').startswith(_RUN_PREFIX)
     ):
-        print(export_alfred_cached_searches_index())
+        search_text = search_text[len(_RUN_PREFIX):].strip()
+        args['<search_text>'] = search_text
+        _is_run_confirmed = bool(search_text)
+
+    # Check if a bg worker is already running for this query — if so,
+    # skip the typing guard and go straight to polling (supports the
+    # fresh-session reopen that shows the progress bar).
+    _bg_worker_active = False
+    if (
+        bool(args.get('--alfred'))
+        and not (args.get('--book') or '').strip()
+        and (search_text or '').strip()
+        and not _is_run_confirmed
+    ):
+        _q = (search_text or '').strip()
+        _roots = resolve_epub_scan_roots(args['--folder'])
+        _fct = epub_scan_cache_token(_roots)
+        _cf = _search_cache_path(_q, _fct)
+        if not os.path.exists(_cf):
+            _cw = _env_positive_int('SEARCH_CONTEXT_WORDS', 'context_words')
+            if _cw is None:
+                _cw = int(args['--context'])
+            _pd = _env_positive_int('SEARCH_PROXIMITY_WORDS')
+            if _pd is None:
+                _pd = int(args['--proximity']) if args['--proximity'] else 100
+            _jid = _alfred_bg_job_id(_fct, _q, _cw, _pd)
+            _sp = os.path.join(_alfred_bg_jobs_dir(), f"{_jid}.status.json")
+            _st = _read_json_if_exists(_sp)
+            if _st and _st.get("phase") == "running" and _pid_is_alive(int(_st.get("pid") or 0)):
+                _bg_worker_active = True
+
+    # All-library Alfred UX: if no !!RUN prefix and no active bg worker,
+    # show typing guard (mirror row + cached searches).
+    if (
+        bool(args.get('--alfred'))
+        and not (args.get('--book') or '').strip()
+        and not _is_run_confirmed
+        and not _bg_worker_active
+    ):
+        print(_build_typing_guard_json(search_text or ''))
         return 0
+
+    # ---- !!RUN confirmed: spawn bg worker, then reopen Alfred as a
+    # fresh session via AppleScript so `rerun` polling works.
+    if _is_run_confirmed and bool(args.get('--alfred')):
+        folder_path = args['--folder']
+        context_words = _env_positive_int('SEARCH_CONTEXT_WORDS', 'context_words')
+        if context_words is None:
+            context_words = int(args['--context'])
+        proximity_distance = _env_positive_int('SEARCH_PROXIMITY_WORDS')
+        if proximity_distance is None:
+            proximity_distance = int(args['--proximity']) if args['--proximity'] else 100
+        create_epub = bool(args['--epub'])
+
+        roots = resolve_epub_scan_roots(folder_path)
+        folder_cache_token = epub_scan_cache_token(roots)
+        cache_file = _search_cache_path(search_text, folder_cache_token)
+
+        if os.path.exists(cache_file):
+            age = time.time() - os.path.getmtime(cache_file)
+            _cache_days = _env_positive_int('SEARCH_CACHE_DAYS') or 11
+            if age < _cache_days * 86400:
+                pass  # cached — fall through to normal search path
+            else:
+                os.unlink(cache_file)
+
+        if not os.path.exists(cache_file):
+            epub_files = _collect_epub_paths_deduped_across_roots(roots)
+            if epub_files:
+                job_id = _alfred_bg_job_id(
+                    folder_cache_token, search_text, context_words, proximity_distance
+                )
+                bg_dir = _alfred_bg_jobs_dir()
+                job_path = os.path.join(bg_dir, f"{job_id}.job.json")
+                status_path = os.path.join(bg_dir, f"{job_id}.status.json")
+                st = _read_json_if_exists(status_path)
+                already_running = (
+                    st and st.get("phase") == "running"
+                    and _pid_is_alive(int(st.get("pid") or 0))
+                )
+                if not already_running:
+                    try:
+                        os.unlink(status_path)
+                    except OSError:
+                        pass
+                    _atomic_write_json(job_path, {
+                        "folder_arg": folder_path,
+                        "search_text": search_text,
+                        "context_words": context_words,
+                        "proximity_distance": proximity_distance,
+                        "create_modified_epubs": create_epub,
+                    })
+                    _atomic_write_json(status_path, {
+                        "phase": "running", "pid": 0, "processed": 0,
+                        "total": len(epub_files),
+                        "current_book": "Starting…",
+                        "accumulated_matches": 0, "updated": time.time(),
+                    })
+                    _spawn_nohup_alfred_bg_worker(job_path)
+
+            safe_q = (search_text or '').replace('\\', '\\\\').replace('"', '\\"')
+            subprocess.Popen(
+                ["osascript", "-e",
+                 f'tell application "Alfred 5" to search "!!ksearch {safe_q}"'],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            launching_json = {"items": [{
+                "uid": "launching",
+                "title": f"🔍 Launching search for '{search_text}'…",
+                "subtitle": "Opening progress view…",
+                "icon": {"path": "icon.png"},
+                "valid": False,
+            }], "skipknowledge": True}
+            print(json.dumps(launching_json, indent=2, ensure_ascii=False))
+            return 0
     
     # Parse arguments
     # Workflow-configurable search tuning (set from Alfred's workflow
@@ -2171,12 +2351,7 @@ def main():
     group_results = args['--group'] if args['--group'] is not None else True      # Default to True
     output_file = args['--output']
     alfred_format = bool(args['--alfred'])
-    
-    if alfred_format:
-        print(f"[DEBUG] Alfred mode enabled. Search term: '{search_text}'", file=sys.stderr)
-    
 
-    
     # Determine search mode: single book or folder
     book_open_arg = ""
 
@@ -2231,9 +2406,7 @@ def main():
                 print(json.dumps(unsupported_json, indent=2, ensure_ascii=False))
                 return 0
         if alfred_format:
-            print(f"[DEBUG] Starting single book search for '{search_text}'...", file=sys.stderr)
             results = search_single_epub(epub_path, search_text, context_words, create_epub, quiet=True, proximity_distance=proximity_distance)
-            print(f"[DEBUG] Search completed. Found {len(results) if results else 0} matches.", file=sys.stderr)
             json_output = export_alfred_json(results, search_text, context_words=context_words, book_open_arg=book_open_arg)
             print(json_output)
             return 0
@@ -2250,9 +2423,7 @@ def main():
         # Search folder of EPUB files
         folder_path = args['--folder']
         if alfred_format:
-            print(f"[DEBUG] Starting folder search with Alfred progress for '{search_text}'...", file=sys.stderr)
             results = search_with_alfred_progress(folder_path, search_text, context_words, create_epub, proximity_distance)
-            print(f"[DEBUG] Alfred progress search completed. Found {len(results) if results else 0} matches.", file=sys.stderr)
             return 0
         else:
             results = search_multiple_epubs(folder_path, search_text, context_words, create_epub, quiet=alfred_format, proximity_distance=proximity_distance)
@@ -2280,9 +2451,6 @@ def main():
         
         sys.stdout.write(json_output + '\n')
         sys.stdout.flush()
-        # Also output to stderr for debugging
-        print(f"[DEBUG] Alfred JSON output:", file=sys.stderr)
-        print(json_output, file=sys.stderr)
     elif results and create_markdown:
         export_markdown_results(results, output_file, group_results)
     elif results and not create_markdown:
