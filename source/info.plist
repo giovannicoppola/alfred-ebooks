@@ -69,6 +69,29 @@
 				<key>vitoclose</key>
 				<true/>
 			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>411D762D-9800-4DD4-B932-290515091AE4</string>
+				<key>modifiers</key>
+				<integer>1835008</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>411D762D-9800-4DD4-B932-290515091AE4</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>27394D31-A067-4505-96AC-05D84162CDA0</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
 		</array>
 		<key>487CE6DD-5966-4E3E-9D67-EF1D60023887</key>
 		<array>
@@ -576,7 +599,7 @@ fi</string>
 				<key>argumenttrimmode</key>
 				<integer>0</integer>
 				<key>argumenttype</key>
-				<integer>0</integer>
+				<integer>1</integer>
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>keyword</key>
@@ -726,6 +749,51 @@ fi</string>
 			<string>alfred.workflow.output.callexternaltrigger</string>
 			<key>uid</key>
 			<string>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>concurrently</key>
+				<false/>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>script</key>
+				<string>export PYTHONPATH="$PWD/lib"
+/usr/bin/python3 deleteSearchCache.py "$1"</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>type</key>
+				<integer>11</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.script</string>
+			<key>uid</key>
+			<string>411D762D-9800-4DD4-B932-290515091AE4</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>lastpathcomponent</key>
+				<false/>
+				<key>onlyshowifquerypopulated</key>
+				<false/>
+				<key>removeextension</key>
+				<false/>
+				<key>text</key>
+				<string></string>
+				<key>title</key>
+				<string></string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.notification</string>
+			<key>uid</key>
+			<string>27394D31-A067-4505-96AC-05D84162CDA0</string>
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
@@ -888,12 +956,26 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<key>ypos</key>
 			<real>350</real>
 		</dict>
+		<key>27394D31-A067-4505-96AC-05D84162CDA0</key>
+		<dict>
+			<key>xpos</key>
+			<real>1380</real>
+			<key>ypos</key>
+			<real>670</real>
+		</dict>
 		<key>28939AD5-7FDB-44B4-87C5-BFCA352716C7</key>
 		<dict>
 			<key>xpos</key>
 			<real>1435</real>
 			<key>ypos</key>
 			<real>75</real>
+		</dict>
+		<key>411D762D-9800-4DD4-B932-290515091AE4</key>
+		<dict>
+			<key>xpos</key>
+			<real>1010</real>
+			<key>ypos</key>
+			<real>645</real>
 		</dict>
 		<key>487CE6DD-5966-4E3E-9D67-EF1D60023887</key>
 		<dict>
