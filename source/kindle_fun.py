@@ -438,6 +438,35 @@ def get_kindleClassic (myFile, downloaded):
 	with open(KINDLE_PICKLE, 'wb') as file:
 		pickle.dump(books, file)
 
+def _fetch_bc_cover_cache(asset_id, icon_path):
+	"""Try Apple Books' BCCoverCache for an unencrypted HEIC cover and convert to JPEG."""
+	bc_dir = os.path.expanduser(
+		f"~/Library/Containers/com.apple.iBooksX/Data/Library/Caches/BCCoverCache-1/BICDiskDataStore/{asset_id}"
+	)
+	if not os.path.isdir(bc_dir):
+		return icon_path
+	heics = sorted(
+		[f for f in os.listdir(bc_dir) if f.endswith('.heic')],
+		key=lambda f: os.path.getsize(os.path.join(bc_dir, f)),
+		reverse=True,
+	)
+	if not heics:
+		return icon_path
+	src = os.path.join(bc_dir, heics[0])
+	try:
+		import subprocess
+		subprocess.run(
+			['sips', '-s', 'format', 'jpeg', src, '--out', icon_path],
+			capture_output=True, timeout=10,
+		)
+		if os.path.exists(icon_path):
+			log("Cover from BCCoverCache: %s", icon_path)
+			return icon_path
+	except Exception as e:
+		log("BCCoverCache conversion failed: %s", e)
+	return icon_path
+
+
 def fetchImageCover(epub_path, ICON_PATH):
 	# a function to retrieve the cover image of the book from the ePUB file
 	import xml.etree.ElementTree as ET
@@ -709,19 +738,31 @@ def get_ibooks(myDatabase):
 			try:
 				urllib.request.urlretrieve(row['ZCOVERURL'], ICON_PATH)
 			except urllib.error.URLError as e:
-				log("Error retrieving image:", e.reason)  # Log the specific error reason
+				log("Error retrieving image:", e.reason)
+			if os.path.exists(ICON_PATH):
+				with open(ICON_PATH, 'rb') as _f:
+					hdr = _f.read(4)
+				if not (hdr[:2] == b'\xff\xd8' or hdr[:4] == b'\x89PNG'):
+					log("Downloaded cover is not a valid image, removing: %s", ICON_PATH)
+					os.remove(ICON_PATH)
 
-		
-		elif not os.path.exists(ICON_PATH) and row['ZPATH'] is not None:
+		if not os.path.exists(ICON_PATH) and row['ZPATH'] is not None:
 			if row['ZPATH'].endswith('.epub'):
-				log ("trying to retrieve image from ePUB file: " + row['ZPATH'])
+				log("trying to retrieve image from ePUB file: " + row['ZPATH'])
 				try:
-					ICON_PATH = fetchImageCover (row['ZPATH'], ICON_PATH)
+					ICON_PATH = fetchImageCover(row['ZPATH'], ICON_PATH)
 				except:
-					log("Error retrieving image") 
-			else:
-				ICON_PATH = "icons/ibooks.png"
-		elif not os.path.exists(ICON_PATH):
+					log("Error retrieving image")
+				if os.path.exists(ICON_PATH) and ICON_PATH != "icons/ibooks.png":
+					with open(ICON_PATH, 'rb') as _f:
+						hdr = _f.read(4)
+					if not (hdr[:2] == b'\xff\xd8' or hdr[:4] == b'\x89PNG'):
+						log("EPUB cover is encrypted, removing: %s", ICON_PATH)
+						os.remove(ICON_PATH)
+
+		if not os.path.exists(ICON_PATH):
+			ICON_PATH = _fetch_bc_cover_cache(row['ZASSETID'], ICON_PATH)
+		if not os.path.exists(ICON_PATH):
 			ICON_PATH = "icons/ibooks.png"
 			
 		

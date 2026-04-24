@@ -259,13 +259,13 @@ def find_proximity_matches(text, word1, word2, max_distance=100):
                 # Convert token positions back to character positions
                 start_char_pos = token_positions[start_token_idx]
                 end_char_pos = token_positions[end_token_idx] + len(tokens[end_token_idx])
-                
+
                 # Create context snippet
                 context_start = max(0, start_token_idx - 10)
                 context_end = min(len(tokens), end_token_idx + 10)
                 context_tokens = tokens[context_start:context_end]
                 context_snippet = ' '.join(context_tokens)
-                
+
                 matches.append((start_char_pos, end_char_pos, context_snippet, distance))
     
     return matches
@@ -408,19 +408,17 @@ def _search_multiple_epubs_one_folder(
                         # Use proximity matching
                         proximity_matches = find_proximity_matches(text_content, word1, word2, max_distance=proximity_distance)
                         
-                        # Convert proximity matches to regular match format
                         matches = []
                         for start_pos, end_pos, context_snippet, distance in proximity_matches:
-                            # Create a mock match object for compatibility
                             class MockMatch:
                                 def __init__(self, start, end, text):
                                     self._start = start
-                                    self._end = end  
+                                    self._end = end
                                     self._text = text
                                 def start(self): return self._start
                                 def end(self): return self._end
                                 def group(self): return self._text
-                            
+
                             match_text = f"{word1} ... {word2} ({distance} {'word' if distance == 1 else 'words'} apart)"
                             matches.append(MockMatch(start_pos, end_pos, match_text))
                     else:
@@ -441,9 +439,10 @@ def _search_multiple_epubs_one_folder(
                             markdown_context = _bold_spans(raw_context, m_slice_start + lead_trim, spans)
                             markdown_string = f"> {markdown_context}\n\n— *{book_title}, {chapter_title}*"
 
-                            match_label = spans[0][2]
-                            if len(spans) > 1:
-                                match_label += f" (+{len(spans) - 1} more)"
+                            labeled_spans = [s for s in spans if s[2]]
+                            match_label = labeled_spans[0][2] if labeled_spans else spans[0][2]
+                            if len(labeled_spans) > 1:
+                                match_label += f" (+{len(labeled_spans) - 1} more)"
 
                             result = {
                                 "book_title": book_title,
@@ -666,22 +665,21 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
             books[book_title].append(result)
         
         # Combined progress and results summary
+        books_with_matches = len(books) or int(progress_info.get("accumulated_books") or 0)
         if total_matches > 0:
             match_s = "match" if total_matches == 1 else "matches"
-            if len(books) > 0:
-                book_s = "book" if len(books) == 1 else "books"
-                match_text = f"{total_matches:,} {match_s} in {len(books)} {book_s} so far"
+            if books_with_matches > 0:
+                book_s = "book" if books_with_matches == 1 else "books"
+                match_text = f"{total_matches:,} {match_s} in {books_with_matches} {book_s} so far"
             else:
                 match_text = f"{total_matches:,} {match_s} so far"
         else:
             match_text = "No matches yet"
         sub_detached = (
-            f"{progress_bar} {current_book} — search runs in the background (nohup); "
-            "reopen !!ksearch with the same query to refresh, or wait for the macOS notification."
+            f"{progress_bar} You can close Alfred and check back later • {current_book}"
             if progress_info.get("detached")
             else (
-                f"{progress_bar} Currently searching: {current_book} — leave Alfred open; "
-                "each refresh scans one more book (sync mode)"
+                f"{progress_bar} Leave Alfred open • {current_book}"
             )
         )
         alfred_items.append({
@@ -699,9 +697,17 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
         alfred_items.append({
             "uid": "no-results",
             "title": "🔍 No matches found",
-            "subtitle": f"No results for '{search_text}' in your book library",
+            "subtitle": f"No results for '{search_text}' in your book library • ⌘⌥↩ back",
             "icon": {"path": "icon.png"},
-            "valid": False
+            "valid": True,
+            "arg": "",
+            "mods": {
+                "cmd+alt": {
+                    "valid": True,
+                    "subtitle": "⬅️ Back to search",
+                    "arg": "",
+                },
+            },
         })
         return json.dumps(alfred_json, indent=2, ensure_ascii=False)
     
@@ -737,9 +743,18 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
             "subtitle": (
                 f"Found {total_matches:,} total matches across {total_books} "
                 f"book{'s' if total_books != 1 else ''}{cache_suffix}"
+                " • ⌘⌥↩ back"
             ),
             "icon": {"path": "icon.png"},
-            "valid": False,
+            "valid": True,
+            "arg": "",
+            "mods": {
+                "cmd+alt": {
+                    "valid": True,
+                    "subtitle": "⬅️ Back to search",
+                    "arg": "",
+                },
+            },
         })
 
     for book_index, (book_title, book_results) in enumerate(sorted_books, 1):
@@ -765,7 +780,14 @@ def export_alfred_books_overview(results, search_text, progress_info=None):
                 "epub_path": book_results[0].get('epub_path', ''),
                 "match_count": str(match_count),
                 "sample_context": sample_context
-            }
+            },
+            "mods": {
+                "cmd+alt": {
+                    "valid": True,
+                    "subtitle": "⬅️ Back to search",
+                    "arg": "",
+                },
+            },
         })
     
     return json.dumps(alfred_json, indent=2, ensure_ascii=False)
@@ -816,9 +838,17 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
         alfred_items.append({
             "uid": "no-results",
             "title": f"No matches found for '{search_text}'",
-            "subtitle": "Try a different search term or check your EPUB files",
+            "subtitle": "Try a different search term • ⌘⌥↩ back",
             "icon": {"path": "icon.png"},
-            "valid": False
+            "valid": True,
+            "arg": "",
+            "mods": {
+                "cmd+alt": {
+                    "valid": True,
+                    "subtitle": "⬅️ Back to search",
+                    "arg": "",
+                },
+            },
         })
     else:
         # Group results by book for cleaner display
@@ -837,10 +867,17 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
             alfred_items.append({
                 "uid": f"zzzz-book-{hash(book_title)}",
                 "title": f"📚 {book_title}",
-                "subtitle": f"Found {match_count:,} match{'es' if match_count != 1 else ''} for '{search_text}'",
+                "subtitle": f"Found {match_count:,} match{'es' if match_count != 1 else ''} for '{search_text}' • ⌘⌥↩ back",
                 "icon": {"path": "icon.png"},
-                "valid": False,
-                "autocomplete": f"{book_title} ",
+                "valid": True,
+                "arg": "",
+                "mods": {
+                    "cmd+alt": {
+                        "valid": True,
+                        "subtitle": "⬅️ Back to search",
+                        "arg": "",
+                    },
+                },
             })
             
             # Individual match entries (limit to prevent overwhelming Alfred)
@@ -897,16 +934,46 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
                     "search_term": search_text
                 })
                 open_location = result.get('file', '')
-                match_mods = {}
-                if book_open_arg and open_location:
+                clean_context = re.sub(
+                    r"\s+", " ", result.get('context', '').replace('**', '')
+                ).strip()
+                match_mods = {
+                    "cmd": {
+                        "valid": True,
+                        "subtitle": "⌘↩ Copy to clipboard",
+                        "arg": clean_context,
+                    },
+                    "cmd+alt": {
+                        "valid": True,
+                        "subtitle": "⬅️ Back to search",
+                        "arg": "",
+                    },
+                }
+                can_open_at_location = (
+                    book_open_arg
+                    and open_location
+                    and book_open_arg.startswith("calibre-open|")
+                )
+                if can_open_at_location:
                     match_mods["shift"] = {
                         "valid": True,
-                        "subtitle": "Open this match location in the book",
+                        "subtitle": "⇧↩ Open book at this location",
                         "arg": f"{book_open_arg}|{open_location}",
                         "variables": {
                             "action": "open_match",
                             "open_location": open_location,
                         },
+                    }
+                elif book_open_arg:
+                    match_mods["shift"] = {
+                        "valid": True,
+                        "subtitle": "⇧↩ Open book",
+                        "arg": book_open_arg,
+                    }
+                else:
+                    match_mods["shift"] = {
+                        "valid": False,
+                        "subtitle": "⇧↩ Open book (not available for this source)",
                     }
 
                 # `fragment_id` is the shared footer-label variable used
@@ -956,11 +1023,19 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
     
     if book_count > 1:
         summary_item = {
-            "uid": "aaaa-summary",  # UID starts with "aaaa" to ensure it sorts first alphabetically
+            "uid": "aaaa-summary",
             "title": f"🔍 Search Results for '{search_text}'",
-            "subtitle": f"Found {total_matches:,} total matches across {book_count} books",
+            "subtitle": f"Found {total_matches:,} total matches across {book_count} books • ⌘⌥↩ back",
             "icon": {"path": "icon.png"},
-            "valid": False
+            "valid": True,
+            "arg": "",
+            "mods": {
+                "cmd+alt": {
+                    "valid": True,
+                    "subtitle": "⬅️ Back to search",
+                    "arg": "",
+                },
+            },
         }
         alfred_items.insert(0, summary_item)
     
@@ -1083,16 +1158,15 @@ def search_single_epub(epub_path, search_text, context_words=10, create_modified
                     # Convert proximity matches to regular match format
                     matches = []
                     for start_pos, end_pos, context_snippet, distance in proximity_matches:
-                        # Create a mock match object for compatibility
                         class MockMatch:
                             def __init__(self, start, end, text):
                                 self._start = start
-                                self._end = end  
+                                self._end = end
                                 self._text = text
                             def start(self): return self._start
                             def end(self): return self._end
                             def group(self): return self._text
-                        
+
                         match_text = f"{word1} ... {word2} ({distance} {'word' if distance == 1 else 'words'} apart)"
                         matches.append(MockMatch(start_pos, end_pos, match_text))
                 else:
@@ -1281,6 +1355,7 @@ def run_alfred_bg_worker(job_path):
             "total": total,
             "current_book": "",
             "accumulated_matches": 0,
+            "accumulated_books": 0,
             "updated": time.time(),
         }
         base.update(kwargs)
@@ -1313,6 +1388,7 @@ def run_alfred_bg_worker(job_path):
                 processed=idx + 1,
                 current_book=title,
                 accumulated_matches=len(results),
+                accumulated_books=len({r.get("book_title") for r in results}),
             )
 
         with open(cache_file, "w", encoding="utf-8") as f:
@@ -1341,7 +1417,7 @@ def run_alfred_bg_worker(job_path):
         books_n = len({r.get("book_title") for r in results}) if results else 0
         _alfred_search_notify(
             "eBooks search finished",
-            f'"{search_text}" — {len(results):,} hits in {books_n} book(s). Open !!ksearch with the same query to browse.',
+            f'"{search_text}" — {len(results):,} hits in {books_n} {"book" if books_n == 1 else "books"}. Open !!ksearch with the same query to browse.',
         )
         return 0
     except Exception as e:
@@ -1512,12 +1588,16 @@ def _search_with_alfred_progress_background(
         acc = (st or {}).get("accumulated_matches")
         if acc is None:
             acc = 0
+        acc_books = (st or {}).get("accumulated_books")
+        if acc_books is None:
+            acc_books = 0
         progress_info = {
             "processed_books": processed,
             "total_books": total,
             "current_book": current_book,
             "is_complete": False,
             "accumulated_matches": int(acc),
+            "accumulated_books": int(acc_books),
             "detached": True,
         }
         json_output = export_alfred_books_overview([], search_text, progress_info)
@@ -1828,13 +1908,36 @@ def _bold_spans(text, slice_start, spans):
     `spans` is a list of `(abs_start, abs_end, _)` in document coordinates;
     `slice_start` converts them to offsets within `text`.
     """
-    sorted_spans = sorted(spans, key=lambda s: s[0], reverse=True)
+    # Convert to local offsets and clamp to text bounds
+    local = []
+    for abs_start, abs_end, _ in spans:
+        s = abs_start - slice_start
+        e = abs_end - slice_start
+        if s < 0:
+            s = 0
+        if e > len(text):
+            e = len(text)
+        if s < e:
+            local.append((s, e))
+    if not local:
+        return text
+    # Merge overlapping / adjacent spans
+    local.sort()
+    merged = [local[0]]
+    for s, e in local[1:]:
+        prev_s, prev_e = merged[-1]
+        if s <= prev_e:
+            merged[-1] = (prev_s, max(prev_e, e))
+        else:
+            merged.append((s, e))
+    # Insert markers back-to-front
     result = text
-    for abs_start, abs_end, _ in sorted_spans:
-        offset = abs_start - slice_start
-        end_offset = abs_end - slice_start
-        if 0 <= offset <= end_offset <= len(result):
-            result = result[:offset] + "**" + result[offset:end_offset] + "**" + result[end_offset:]
+    for offset, end_offset in reversed(merged):
+        before = result[:offset]
+        after = result[end_offset:]
+        pre_sp = "" if not before or before[-1] in " \t\n\r" else " "
+        post_sp = "" if not after or after[0] in " \t\n\r.,;:!?\"')" else " "
+        result = before + pre_sp + "**" + result[offset:end_offset] + "**" + post_sp + after
     return result
 
 
@@ -1900,7 +2003,7 @@ def _search_cache_dir():
     return cache_dir
 
 
-_RUN_PREFIX = "!!RUN "
+_RUN_PREFIX = "​"
 
 
 def _build_typing_guard_json(search_text, book_path=None):
@@ -2006,10 +2109,18 @@ def export_alfred_cached_searches_index():
             "subtitle": (
                 f"{total_matches:,} matches across {total_books} "
                 f"book{'s' if total_books != 1 else ''} • cached {age_label} ago{roots_text}"
+                " • ⌘⌥↩ back"
             ),
             "icon": {"path": "icon.png"},
-            "valid": False,
-            "autocomplete": f"{_RUN_PREFIX}{query}",
+            "valid": True,
+            "arg": f"{_RUN_PREFIX}{query}",
+            "mods": {
+                "cmd+alt": {
+                    "valid": True,
+                    "subtitle": "⬅️ Back to search",
+                    "arg": "",
+                },
+            },
             "mods": {
                 "cmd+alt+ctrl": {
                     "valid": bool(cache_id),
@@ -2086,7 +2197,7 @@ def parse_book_input(book_input):
         )
         return {"book_path": bundle_dir, "open_arg": book_input}
 
-    return {"book_path": book_input, "open_arg": ""}
+    return {"book_path": book_input, "open_arg": book_input}
 
 
 def main():
@@ -2197,6 +2308,32 @@ def main():
                 }
                 print(json.dumps(error_json, indent=2))
                 return 1
+
+    # ---- Alfred single-book guard: show book title, require 3+ chars ----
+    if (
+        bool(args.get('--alfred'))
+        and (args.get('--book') or '').strip()
+    ):
+        raw_book_arg = (args.get('--book') or '').strip()
+        book_path = os.path.expanduser(
+            parse_book_input(raw_book_arg)["book_path"]
+        )
+        raw_name = os.path.splitext(os.path.basename(book_path.rstrip("/")))[0]
+        try:
+            book_title = get_book_title_from_epub(book_path)
+        except Exception:
+            book_title = raw_name
+        typed = (search_text or '').strip()
+        if len(typed) < 3:
+            hint_json = {"items": [{
+                "uid": "single-book-hint",
+                "title": f"🔍 Search in '{book_title}'",
+                "subtitle": f"Type at least 3 characters… ({typed})" if typed else "Type a search term…",
+                "icon": {"path": "icon.png"},
+                "valid": False,
+            }], "skipknowledge": True}
+            print(json.dumps(hint_json, indent=2, ensure_ascii=False))
+            return 0
 
     # ---- Alfred typing guard for all-library search ----
     # Detect !!RUN prefix: user confirmed the search via Enter.

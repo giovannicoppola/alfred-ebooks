@@ -46,6 +46,7 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 - **Cleaner highlight modifiers** — `⌘↩` on any highlight row copies the passage to the clipboard; the old `⌥` fallback that pasted text into the Alfred query box is gone.
 - **Streamlined book-row modifiers** — the CMD modifier no longer shows the internal icon path.
 - **Thousand separators in match counts** — search results now display "1,234 matches" instead of "1234 matches" for easier scanning.
+- **Improved cover image extraction** — downloaded and EPUB-extracted covers are now validated against JPEG/PNG magic bytes; corrupted or DRM-encrypted images are discarded and the workflow falls back to Apple Books' own `BCCoverCache` (HEIC → JPEG via `sips`), recovering covers that were previously missing.
 
 ### Version 0.2
 

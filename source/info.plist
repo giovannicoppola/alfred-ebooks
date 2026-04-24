@@ -71,6 +71,26 @@
 			</dict>
 			<dict>
 				<key>destinationuid</key>
+				<string>88E41168-BDA4-4605-8F4C-A0A507AE11D1</string>
+				<key>modifiers</key>
+				<integer>1048576</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<true/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>5330E514-8491-49F5-98D8-DED98E264BC1</string>
+				<key>modifiers</key>
+				<integer>1572864</integer>
+				<key>modifiersubtext</key>
+				<string>⬅️back</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
 				<string>411D762D-9800-4DD4-B932-290515091AE4</string>
 				<key>modifiers</key>
 				<integer>1835008</integer>
@@ -137,8 +157,6 @@
 				<integer>0</integer>
 				<key>modifiersubtext</key>
 				<string></string>
-				<key>sourceoutputuid</key>
-				<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -149,6 +167,8 @@
 				<integer>0</integer>
 				<key>modifiersubtext</key>
 				<string></string>
+				<key>sourceoutputuid</key>
+				<string>E679B9F4-22A7-4B7E-BE1B-3C42FEF03055</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -669,13 +689,13 @@ fi</string>
 				<key>queuedelaycustom</key>
 				<integer>3</integer>
 				<key>queuedelayimmediatelyinitially</key>
-				<true/>
+				<false/>
 				<key>queuedelaymode</key>
-				<integer>0</integer>
+				<integer>1</integer>
 				<key>queuemode</key>
 				<integer>1</integer>
 				<key>runningsubtext</key>
-				<string>🔍 Searching your library… please wait</string>
+				<string>🔍 Searching… please wait</string>
 				<key>script</key>
 				<string>export PYTHONPATH="$PWD/lib"
 /usr/bin/python3 searchEPUB.py "$1" --book="$curr_book" --alfred
@@ -823,7 +843,7 @@ fi</string>
 				<integer>102</integer>
 				<key>script</key>
 				<string>export PYTHONPATH="$PWD/lib"
-/usr/bin/python3 deleteSearchCache.py "$1"</string>
+/usr/bin/python3 deleteSearchCache.py "$1" --alfred</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -850,7 +870,7 @@ fi</string>
 				<key>text</key>
 				<string></string>
 				<key>title</key>
-				<string></string>
+				<string>{var:delete_notify}</string>
 			</dict>
 			<key>type</key>
 			<string>alfred.workflow.output.notification</string>

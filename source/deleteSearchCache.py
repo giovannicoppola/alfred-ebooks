@@ -99,14 +99,17 @@ def main():
 
     if removed:
         query_part = f" for '{cached_query}'" if cached_query else ""
-        _emit(
-            f"Deleted cache{query_part} ({len(removed)} file{'s' if len(removed) != 1 else ''})",
-            ok=True,
-            alfred=alfred,
-        )
+        msg = f"Deleted cache{query_part} ({len(removed)} file{'s' if len(removed) != 1 else ''})"
+        if alfred:
+            print(" ")
+        else:
+            print(msg)
         return 0
 
-    _emit(f"Cache {cache_id} not found", ok=False, alfred=alfred)
+    if alfred:
+        print(" ")
+    else:
+        _emit(f"Cache {cache_id} not found", ok=False, alfred=alfred)
     return 1
 
 
