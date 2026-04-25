@@ -33,8 +33,15 @@ import shutil
 import xml.etree.ElementTree as ET
 
 
+def _is_jpeg_or_png_file(path):
+	"""True if path exists and starts with JPEG or PNG magic bytes."""
+	if not os.path.isfile(path):
+		return False
+	with open(path, "rb") as f:
+		h = f.read(4)
+	return h[:2] == b"\xff\xd8" or h[:4] == b"\x89PNG"
 
-			
+
 def checkMatch (search_string, authorName, title):
 				for s in search_string.split():
 					if s not in authorName.casefold() and s not in title.casefold():
@@ -734,17 +741,24 @@ def get_ibooks(myDatabase):
 			
 		ICON_PATH = f"{CACHE_FOLDER_IMAGES_IBOOKS}{row['ZASSETID']}"
 
+		# If the cache holds a non-image (e.g. encrypted EPUB resource from an
+		# older build), do not skip URL / EPUB / BCCoverCache — those branches
+		# only run when the file is missing.
+		if os.path.exists(ICON_PATH) and not _is_jpeg_or_png_file(ICON_PATH):
+			log("Removing invalid iBooks cover cache: %s", ICON_PATH)
+			try:
+				os.remove(ICON_PATH)
+			except OSError:
+				pass
+
 		if not os.path.exists(ICON_PATH) and row['ZCOVERURL'] is not None:
 			try:
 				urllib.request.urlretrieve(row['ZCOVERURL'], ICON_PATH)
 			except urllib.error.URLError as e:
 				log("Error retrieving image:", e.reason)
-			if os.path.exists(ICON_PATH):
-				with open(ICON_PATH, 'rb') as _f:
-					hdr = _f.read(4)
-				if not (hdr[:2] == b'\xff\xd8' or hdr[:4] == b'\x89PNG'):
-					log("Downloaded cover is not a valid image, removing: %s", ICON_PATH)
-					os.remove(ICON_PATH)
+			if os.path.exists(ICON_PATH) and not _is_jpeg_or_png_file(ICON_PATH):
+				log("Downloaded cover is not a valid image, removing: %s", ICON_PATH)
+				os.remove(ICON_PATH)
 
 		if not os.path.exists(ICON_PATH) and row['ZPATH'] is not None:
 			if row['ZPATH'].endswith('.epub'):
@@ -753,12 +767,10 @@ def get_ibooks(myDatabase):
 					ICON_PATH = fetchImageCover(row['ZPATH'], ICON_PATH)
 				except:
 					log("Error retrieving image")
-				if os.path.exists(ICON_PATH) and ICON_PATH != "icons/ibooks.png":
-					with open(ICON_PATH, 'rb') as _f:
-						hdr = _f.read(4)
-					if not (hdr[:2] == b'\xff\xd8' or hdr[:4] == b'\x89PNG'):
-						log("EPUB cover is encrypted, removing: %s", ICON_PATH)
-						os.remove(ICON_PATH)
+				if os.path.exists(ICON_PATH) and ICON_PATH != "icons/ibooks.png" \
+						and not _is_jpeg_or_png_file(ICON_PATH):
+					log("EPUB cover is encrypted, removing: %s", ICON_PATH)
+					os.remove(ICON_PATH)
 
 		if not os.path.exists(ICON_PATH):
 			ICON_PATH = _fetch_bc_cover_cache(row['ZASSETID'], ICON_PATH)

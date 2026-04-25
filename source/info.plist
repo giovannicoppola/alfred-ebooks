@@ -51,6 +51,16 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
+				<string>88E41168-BDA4-4605-8F4C-A0A507AE11D1</string>
+				<key>modifiers</key>
+				<integer>1048576</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<true/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
 				<string>C201E860-5900-49B2-8980-4B8E5DA0A4C8</string>
 				<key>modifiers</key>
 				<integer>131072</integer>
@@ -64,16 +74,6 @@
 				<string>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</string>
 				<key>modifiers</key>
 				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<true/>
-			</dict>
-			<dict>
-				<key>destinationuid</key>
-				<string>88E41168-BDA4-4605-8F4C-A0A507AE11D1</string>
-				<key>modifiers</key>
-				<integer>1048576</integer>
 				<key>modifiersubtext</key>
 				<string></string>
 				<key>vitoclose</key>

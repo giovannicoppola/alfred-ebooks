@@ -82,6 +82,12 @@ _TAG_FILTER_RE = re.compile(r'--tag[:=\s]+(?:\(([^)]+)\)|(\S+))')
 # and notes. An empty tail triggers a prompt + summary response.
 _HIGHLIGHTS_RE = re.compile(r'(?:^|\s)--highlights?\b(.*)$', re.IGNORECASE)
 
+# Matches just the --highlights operator token (no tail capture). Used to
+# strip the operator out of a query while preserving everything else, so
+# book-level filters that appear *after* `--highlights` (e.g.
+# `--highlights --tag sci-fi`) still get parsed by `_apply_book_filters`.
+_HIGHLIGHTS_TOKEN_RE = re.compile(r'(?<!\S)--highlights?\b', re.IGNORECASE)
+
 # `drill_source` and `drill_book_id` are set by the main script filter's
 # alt-mod as Alfred `variables` on the selected book. They arrive here via
 # a Call External Trigger -> Script Filter chain (trigger id "highlightsDrill",
@@ -123,30 +129,110 @@ def _index_highlights_by_book(highlights):
 	return counts
 
 
-def _apply_non_tag_filters(books, search_string):
+def _apply_book_filters(books, search_string, *, include_tag_filter=True):
 	"""
-	Apply every filter that search_books() understands *except* --tag and the
-	free-text query itself. Used to scope tag autocomplete suggestions: if the
-	user typed `--p --tag`, we should only suggest tags that appear on
-	purchased books.
+	Apply every book-level filter operator and return
+	`(filtered_books, remaining_query)`.
+
+	The remaining query has each consumed operator (--p, --l, --d, --k, --ib,
+	--c, --y, --read, --tagged, --tag <name>) stripped out, so the caller can
+	run free-text matching (or a substring search over highlights) on what's
+	left without re-tripping on the operator tokens.
+
+	Pass `include_tag_filter=False` to skip --tag handling — needed by the
+	tag-autocomplete code path so it can compute tag counts over the rest of
+	the active filters without recursing into the very tag the user is in
+	the middle of choosing.
+
+	This is the single source of truth for book-level filter semantics, so
+	`!k --tag sci-fi --highlights stoic` and
+	`!k --highlights stoic --tag sci-fi` both resolve to "search highlights
+	matching 'stoic' across books tagged 'sci-fi'" (filters are cumulative
+	regardless of position relative to `--highlights`).
 	"""
 	if '--p' in search_string:
+		search_string = search_string.replace('--p', '')
 		books = [b for b in books if b.loaned != 1]
 	if '--l' in search_string:
+		search_string = search_string.replace('--l', '')
 		books = [b for b in books if b.loaned == 1]
 	if '--d' in search_string:
+		search_string = search_string.replace('--d', '')
 		books = [b for b in books if b.downloaded == 1]
 	if '--k' in search_string:
+		search_string = search_string.replace('--k', '')
 		books = [b for b in books if b.source == 'Kindle']
 	if '--ib' in search_string:
+		search_string = search_string.replace('--ib', '')
 		books = [b for b in books if b.source == 'iBooks']
 	if '--c' in search_string:
+		search_string = search_string.replace('--c', '')
 		books = [b for b in books if b.source == 'Calibre']
+	if '--y' in search_string:
+		search_string = search_string.replace('--y', '')
+		books = [b for b in books if b.source == 'Yomu']
 	if '--read' in search_string:
+		search_string = search_string.replace('--read', '')
 		books = [b for b in books if b.read_pct == '100.0%']
+
+	if include_tag_filter:
+		tag_filters = []
+		def _consume_tag(match):
+			tag_filters.append((match.group(1) or match.group(2) or "").strip())
+			return ''
+		search_string = _TAG_FILTER_RE.sub(_consume_tag, search_string)
+		tag_filters = [t for t in tag_filters if t]
+		if tag_filters:
+			needles = [t.lower() for t in tag_filters]
+			books = [
+				b for b in books
+				if all(
+					any(n in t.lower() for t in b.tag_list)
+					for n in needles
+				)
+			]
+
+	if '--tagged' in search_string:
+		search_string = search_string.replace('--tagged', '')
+		books = [b for b in books if b.tag_list]
+
 	if GHOST_RESULTS == '0':
 		books = [b for b in books if b.loaned == 0]
-	return books
+
+	return books, search_string
+
+
+def _apply_non_tag_filters(books, search_string):
+	"""
+	Apply every filter that `_apply_book_filters` understands *except* --tag
+	and the free-text query itself. Used to scope tag autocomplete
+	suggestions: if the user typed `--p --tag`, we should only suggest tags
+	that appear on purchased books.
+	"""
+	scoped, _ = _apply_book_filters(books, search_string, include_tag_filter=False)
+	return scoped
+
+
+# Human-readable library names for tag-list subtitles (matches `book.source`).
+_TAG_SOURCE_LABELS = {
+	"Kindle": "Kindle",
+	"iBooks": "Apple Books",
+	"Calibre": "Calibre",
+	"Yomu": "Yomu",
+}
+
+
+def _tag_libraries_subtitle(by_source):
+	"""
+	Format which libraries a tag appears in, e.g.
+	`Apple Books · Calibre` — sorted by label for stable ordering.
+	"""
+	parts = []
+	for src in sorted(by_source, key=lambda s: _TAG_SOURCE_LABELS.get(s, s).lower()):
+		if by_source.get(src, 0) <= 0:
+			continue
+		parts.append(_TAG_SOURCE_LABELS.get(src, src or "unknown"))
+	return " · ".join(parts) if parts else ""
 
 
 def build_tag_suggestions_response(books, search_string):
@@ -157,9 +243,14 @@ def build_tag_suggestions_response(books, search_string):
 	scoped = _apply_non_tag_filters(books, search_string)
 
 	tag_counts = {}
+	# Per-tag, per-source book counts (each book counts once per tag).
+	tag_by_source = {}
 	for book in scoped:
 		for tag in book.tag_list:
 			tag_counts[tag] = tag_counts.get(tag, 0) + 1
+			if tag not in tag_by_source:
+				tag_by_source[tag] = {}
+			tag_by_source[tag][book.source] = tag_by_source[tag].get(book.source, 0) + 1
 
 	# Keep everything the user has already typed, minus the trailing bare
 	# --tag token. We re-append `--tag <name>` ourselves for autocomplete.
@@ -199,9 +290,12 @@ def build_tag_suggestions_response(books, search_string):
 		# we wrap them in parentheses. The `--tag` parser below unwraps
 		# them. Same convention as the AlfreDo workflow.
 		tag_token = f"({tag_name})" if " " in tag_name else tag_name
+		lib_line = _tag_libraries_subtitle(tag_by_source.get(tag_name, {}))
 		items.append({
-			"title": f"🏷️ {tag_name}",
-			"subtitle": f"{count} book{'s' if count != 1 else ''} tagged '{tag_name}'",
+			"title": f"🏷️ {tag_name} ({count:,})",
+			"subtitle": (
+				f"(📚 {lib_line})" if lib_line else "(📚 unknown)"
+			),
 			"autocomplete": f"{prefix_autocomplete}--tag {tag_token} ",
 			"arg": f"--tag {tag_token}",
 			"valid": False,
@@ -585,37 +679,34 @@ def build_highlights_response(highlights, books, search_string):
 	  nudging the user to type search text.
 	- With a tail query -> flat list of matching highlights across all sources,
 	  each showing book title + highlighted passage as subtitle.
-	- Respects per-source filters (--k / --ib / --c / --y) if present so you
-	  can narrow, e.g. "--ib --highlights stoic" -> Apple-Books-only results.
+	- Respects every book-level filter (`--p`, `--l`, `--d`, `--read`, source
+	  selectors `--k` / `--ib` / `--c` / `--y`, `--tag <name>`, `--tagged`)
+	  so they stack cumulatively with `--highlights`. Example:
+	  `!k --tag sci-fi --highlights stoic` searches highlights matching
+	  "stoic" inside books tagged 'sci-fi'.
 	"""
-	# Apply source filters (same tokens as regular book search). We do *not*
-	# apply --p / --l / --d / --read here; those are library-level concepts.
-	allowed_sources = None
-	selectors = []
-	if '--k' in search_string:
-		selectors.append('Kindle')
-	if '--ib' in search_string:
-		selectors.append('iBooks')
-	if '--c' in search_string:
-		selectors.append('Calibre')
-	if '--y' in search_string:
-		selectors.append('Yomu')
-	if selectors:
-		allowed_sources = set(selectors)
-		highlights = [h for h in highlights if h.source in allowed_sources]
+	total_books = len(books)
 
-	# Look up book titles / authors / icons so a highlight row can render
-	# meaningful context. Keyed by (source, book_id) same as hl_counts.
-	book_lookup = {(b.source, b.bookID): b for b in books}
+	# Strip just the --highlights operator token (NOT its tail) so book
+	# filters appearing on either side of it get parsed normally and
+	# whatever's left becomes the highlight substring search.
+	no_op_query = _HIGHLIGHTS_TOKEN_RE.sub(' ', search_string)
 
-	# Extract the free-text tail that follows `--highlights`.
-	m = _HIGHLIGHTS_RE.search(search_string)
-	tail = (m.group(1) if m else "").strip()
-	# Strip out remaining operator tokens from the tail so they don't leak
-	# into the substring match.
-	for tok in ('--k', '--ib', '--c', '--y', '--tagged'):
-		tail = tail.replace(tok, '')
+	# Apply every book-level filter. After this, `tail` holds the free-text
+	# remainder used as a substring search against highlight passages/notes,
+	# and `filtered_books` is the in-scope set whose highlights we keep.
+	filtered_books, tail = _apply_book_filters(books, no_op_query)
 	tail = tail.strip()
+	filters_applied = len(filtered_books) < total_books
+
+	allowed_keys = {(b.source, b.bookID) for b in filtered_books}
+	highlights = [
+		h for h in highlights if (h.source, h.book_id) in allowed_keys
+	]
+
+	# Look up book titles / authors / icons for the in-scope books only —
+	# enough to render rows for highlights that survived the filter pass.
+	book_lookup = {(b.source, b.bookID): b for b in filtered_books}
 
 	items = []
 
@@ -623,9 +714,15 @@ def build_highlights_response(highlights, books, search_string):
 	if not tail:
 		if not highlights:
 			items.append({
-				"title": "No highlights yet",
+				"title": (
+					"No highlights match the active filters"
+					if filters_applied
+					else "No highlights yet"
+				),
 				"subtitle": (
-					"Apple Books / Calibre / Yomu store the text locally; "
+					"Try removing --tag / --read / source selectors to widen the search."
+					if filters_applied
+					else "Apple Books / Calibre / Yomu store the text locally; "
 					"Kindle stores counts + notes only."
 				),
 				"valid": False,
@@ -652,11 +749,11 @@ def build_highlights_response(highlights, books, search_string):
 			"icon": {"path": "icon.png"},
 		})
 		# Also list books with the most highlights so they can dive in.
-		candidate_books = books
-		if allowed_sources is not None:
-			candidate_books = [b for b in books if b.source in allowed_sources]
+		# `filtered_books` is already scoped by every active operator
+		# (source / tag / read / …) so this list automatically reflects
+		# the cumulative filters from the user's query.
 		top_books = sorted(
-			(b for b in candidate_books if b.highlights_count),
+			(b for b in filtered_books if b.highlights_count),
 			key=lambda b: -b.highlights_count,
 		)[:15]
 		for b in top_books:
@@ -683,7 +780,11 @@ def build_highlights_response(highlights, books, search_string):
 	if not matches:
 		items.append({
 			"title": f"No highlights match '{tail}'",
-			"subtitle": "Try a shorter / different word, or check source filters.",
+			"subtitle": (
+				"Try a shorter / different word, or relax the active filters."
+				if filters_applied
+				else "Try a shorter / different word, or check source filters."
+			),
 			"valid": False,
 			"icon": {"path": "icons/Warning.png"},
 		})
@@ -756,65 +857,13 @@ def build_highlights_response(highlights, books, search_string):
 
 
 def search_books(books, search_string):
-	if '--p' in search_string:
-		search_string = search_string.replace('--p', '')
-		books = [book for book in books if book.loaned != 1]
-	
-	if '--l' in search_string:
-		search_string = search_string.replace('--l', '')
-		books = [book for book in books if book.loaned == 1]
-	
-	if '--d' in search_string:
-		search_string = search_string.replace('--d', '')
-		books = [book for book in books if book.downloaded == 1]
-	
-
-	if '--k' in search_string:
-		search_string = search_string.replace('--k', '')
-		books = [book for book in books if book.source == 'Kindle']
-	
-	if '--ib' in search_string:
-		search_string = search_string.replace('--ib', '')
-		books = [book for book in books if book.source == 'iBooks']
-
-	if '--c' in search_string:
-		search_string = search_string.replace('--c', '')
-		books = [book for book in books if book.source == 'Calibre']
-	
-	if '--read' in search_string:
-		search_string = search_string.replace('--read', '')
-		books = [book for book in books if book.read_pct == '100.0%']
-
-	# Narrow by tag name, e.g. `--tag sci-fi`, `--tag:Durant`, or — for
-	# multi-word tags coming from the autocomplete dropdown —
-	# `--tag (home improvement)`. Matches are substring, case-insensitive,
-	# against any individual tag on the book. We strip each matched token
-	# out of `search_string` as we go so the remaining words fall through
-	# to the free-text title/author search.
-	tag_filters = []
-	def _consume_tag(match):
-		tag_filters.append((match.group(1) or match.group(2) or "").strip())
-		return ''
-	search_string = _TAG_FILTER_RE.sub(_consume_tag, search_string)
-	tag_filters = [t for t in tag_filters if t]
-	if tag_filters:
-		needles = [t.lower() for t in tag_filters]
-		books = [
-			book
-			for book in books
-			if all(
-				any(n in t.lower() for t in book.tag_list)
-				for n in needles
-			)
-		]
-
-	# Books with any tag at all — useful to see what got classified.
-	if '--tagged' in search_string:
-		search_string = search_string.replace('--tagged', '')
-		books = [book for book in books if book.tag_list]
-
-	if GHOST_RESULTS == '0':
-		books = [book for book in books if book.loaned == 0]
+	# Consume every operator (--p / --l / --d / --k / --ib / --c / --y /
+	# --read / --tag <name> / --tagged) and strip them out of the query.
+	# Whatever's left is the free-text title/author search. Centralizing
+	# this in `_apply_book_filters` keeps `--highlights` and the regular
+	# book search using the same filter semantics, so flags stack
+	# cumulatively across both modes.
+	books, search_string = _apply_book_filters(books, search_string)
 
 	search_fragments = search_string.split()
 	if not search_fragments:
