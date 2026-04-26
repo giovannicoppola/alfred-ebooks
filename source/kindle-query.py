@@ -477,6 +477,22 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 
 		header_arg = _book_open_arg(target_book)
 
+		header_search_arg, header_search_reason = _resolve_searchable_epub(target_book)
+		header_mods = {
+			"ctrl": {
+				"valid": bool(header_search_arg),
+				"subtitle": (
+					f"⌃↩ Search inside this book"
+					if header_search_arg
+					else f"⌃↩ Not searchable — {header_search_reason}"
+				),
+				"arg": header_search_arg or "",
+			},
+			"alt": {
+				"valid": False,
+				"subtitle": "",
+			},
+		}
 		items.append({
 			"title": header_title,
 			"subtitle": " – ".join(header_subtitle_bits),
@@ -486,6 +502,7 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 			"variables": {
 				"action": "open_book",
 			},
+			"mods": header_mods,
 		})
 
 	if not book_highlights:
@@ -657,6 +674,11 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 					"action": "open_book",
 				},
 			}
+
+		item["mods"]["alt"] = {
+			"valid": False,
+			"subtitle": "",
+		}
 		items.append(item)
 
 	return {"items": items}
@@ -908,15 +930,44 @@ def build_highlights_response(highlights, books, search_string):
 		}
 		if quicklook_path:
 			item["quicklookurl"] = quicklook_path
+		item["mods"] = {}
 		if h.text or h.note:
 			copy_body = _normalize_body(h.text or h.note)
-			item["mods"] = {
-				"cmd": {
-					"valid": True,
-					"subtitle": f"⌘↩ Copy to clipboard",
-					"arg": copy_body,
-				}
+			item["mods"]["cmd"] = {
+				"valid": True,
+				"subtitle": "⌘↩ Copy to clipboard",
+				"arg": copy_body,
 			}
+
+		search_book_arg, search_reason = _resolve_searchable_epub(b)
+		if search_book_arg:
+			item["mods"]["ctrl"] = {
+				"valid": True,
+				"subtitle": f"⌃↩ Search this book ({b.source})" if b else "⌃↩ Search this book",
+				"arg": search_book_arg,
+			}
+		else:
+			item["mods"]["ctrl"] = {
+				"valid": False,
+				"subtitle": f"⌃↩ Not searchable — {search_reason}",
+				"arg": "",
+			}
+
+		open_arg_hl = h.arg
+		if not open_arg_hl and b is not None:
+			open_arg_hl = _book_open_arg(b)
+		if open_arg_hl:
+			item["mods"]["shift"] = {
+				"valid": True,
+				"subtitle": f"⇧↩ Open book ({b.source})" if b else "⇧↩ Open book",
+				"arg": open_arg_hl,
+				"variables": {"action": "open_book"},
+			}
+
+		item["mods"]["alt"] = {
+			"valid": False,
+			"subtitle": "",
+		}
 		items.append(item)
 
 	return {"items": items}
