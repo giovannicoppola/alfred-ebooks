@@ -2302,6 +2302,9 @@ def main():
                 "subtitle": f"Type at least 3 characters… ({typed})" if typed else "Type a search term…",
                 "icon": {"path": "icon.png"},
                 "valid": False,
+                "mods": {
+                    "cmd+alt": {"valid": False, "subtitle": ""},
+                },
             }], "skipknowledge": True}
             print(json.dumps(hint_json, indent=2, ensure_ascii=False))
             return 0
