@@ -845,16 +845,39 @@ def build_highlights_response(highlights, books, search_string):
 			key=lambda b: -b.highlights_count,
 		)[:15]
 		for b in top_books:
-			items.append({
+			open_arg = _book_open_arg(b)
+			book_item = {
 				"title": f"💬 {b.highlights_count} – {b.title}",
 				"subtitle": f"{b.author} (📚 {b.source})",
-				"valid": False,
+				"valid": bool(open_arg),
+				"arg": open_arg or "",
 				"icon": {"path": b.icon_path or "icon.png"},
-				"autocomplete": (
-					_HIGHLIGHTS_RE.sub("", search_string).rstrip()
-					+ f" --highlights "
+				"mods": {},
+			}
+			search_arg, search_reason = _resolve_searchable_epub(b)
+			book_item["mods"]["ctrl"] = {
+				"valid": bool(search_arg),
+				"subtitle": (
+					"⌃↩ Search inside this book"
+					if search_arg
+					else f"⌃↩ Not searchable — {search_reason}"
 				),
-			})
+				"arg": search_arg or "",
+			}
+			if b.bookID:
+				book_item["mods"]["alt"] = {
+					"valid": True,
+					"subtitle": (
+						f"⌥↩ List {b.highlights_count} highlight"
+						f"{'s' if b.highlights_count != 1 else ''}"
+					),
+					"arg": "",
+					"variables": {
+						"drill_source": b.source,
+						"drill_book_id": b.bookID,
+					},
+				}
+			items.append(book_item)
 		return {"items": items}
 
 	# Filtered list: substring match against text + note, case-insensitive.

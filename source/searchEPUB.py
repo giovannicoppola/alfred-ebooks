@@ -838,17 +838,9 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
         alfred_items.append({
             "uid": "no-results",
             "title": f"No matches found for '{search_text}'",
-            "subtitle": "Try a different search term • ⌘⌥↩ back",
+            "subtitle": "Try a different search term",
             "icon": {"path": "icon.png"},
-            "valid": True,
-            "arg": "",
-            "mods": {
-                "cmd+alt": {
-                    "valid": True,
-                    "subtitle": "⬅️ Back to search",
-                    "arg": "",
-                },
-            },
+            "valid": False,
         })
     else:
         # Group results by book for cleaner display
@@ -867,17 +859,9 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
             alfred_items.append({
                 "uid": f"zzzz-book-{hash(book_title)}",
                 "title": f"📚 {book_title}",
-                "subtitle": f"Found {match_count:,} match{'es' if match_count != 1 else ''} for '{search_text}' • ⌘⌥↩ back",
+                "subtitle": f"Found {match_count:,} match{'es' if match_count != 1 else ''} for '{search_text}'",
                 "icon": {"path": "icon.png"},
-                "valid": True,
-                "arg": "",
-                "mods": {
-                    "cmd+alt": {
-                        "valid": True,
-                        "subtitle": "⬅️ Back to search",
-                        "arg": "",
-                    },
-                },
+                "valid": False,
             })
             
             # Individual match entries (limit to prevent overwhelming Alfred)
@@ -942,11 +926,6 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
                         "valid": True,
                         "subtitle": "⌘↩ Copy to clipboard",
                         "arg": clean_context,
-                    },
-                    "cmd+alt": {
-                        "valid": True,
-                        "subtitle": "⬅️ Back to search",
-                        "arg": "",
                     },
                 }
                 can_open_at_location = (
@@ -1025,17 +1004,9 @@ def export_alfred_json(results, search_text, progress_info=None, context_words=3
         summary_item = {
             "uid": "aaaa-summary",
             "title": f"🔍 Search Results for '{search_text}'",
-            "subtitle": f"Found {total_matches:,} total matches across {book_count} books • ⌘⌥↩ back",
+            "subtitle": f"Found {total_matches:,} total matches across {book_count} books",
             "icon": {"path": "icon.png"},
-            "valid": True,
-            "arg": "",
-            "mods": {
-                "cmd+alt": {
-                    "valid": True,
-                    "subtitle": "⬅️ Back to search",
-                    "arg": "",
-                },
-            },
+            "valid": False,
         }
         alfred_items.insert(0, summary_item)
     
