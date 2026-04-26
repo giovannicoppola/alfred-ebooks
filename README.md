@@ -47,6 +47,7 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 - **Streamlined book-row modifiers** — the CMD modifier no longer shows the internal icon path.
 - **Thousand separators in match counts** — search results now display "1,234 matches" instead of "1234 matches" for easier scanning.
 - **Improved cover image extraction** — downloaded and EPUB-extracted covers are now validated against JPEG/PNG magic bytes; corrupted or DRM-encrypted images are discarded and the workflow falls back to Apple Books' own `BCCoverCache` (HEIC → JPEG via `sips`), recovering covers that were previously missing.
+- **`#` tag shorthand** — type `#` to instantly list all available tags; keep typing to filter (e.g. `#bio`). Press ↩ to select a tag and continue your search. Multiple tags can be stacked (`#sci-fi #favorite`) and combined with other operators (`#sci-fi --highlights stoic`). The existing `--tag` syntax still works.
 
 ### Version 0.2
 
@@ -106,7 +107,8 @@ Highlights of the v0.2 dev-branch work (full details in [whatsnew.md](whatsnew.m
 	- `--c` will filter for Calibre books
 	- `--read` will filter for read books
 	- `--tagged` will filter for books that have at least one tag
-	- `--tag <name>` narrows to books whose tags match `<name>` (substring, case-insensitive). Can be combined, e.g. `--tag sci-fi --tag favorite`. For multi-word tags, wrap the name in parentheses: `--tag (home improvement)` — the autocomplete dropdown does this automatically when you tab-complete a tag that contains a space.
+	- `#` lists all available tags; keep typing to filter (e.g. `#bio`). Press ↩ to select a tag and continue searching. Multiple tags can be combined (e.g. `#sci-fi #favorite`), and tags stack with other filters (e.g. `#sci-fi --highlights stoic`). Multi-word tags are parenthesized automatically: `#(Want to Read)`.
+	- `--tag <name>` is the long-form equivalent of `#<name>` — narrows to books whose tags match `<name>` (substring, case-insensitive). Can be combined, e.g. `--tag sci-fi --tag favorite`. For multi-word tags, wrap the name in parentheses: `--tag (home improvement)`.
 	- `--highlights` switches into cross-library highlight search. Bare `--highlights` shows a summary (per-source counts + top books by highlight count). `--highlights <words>` returns a flat list of highlights whose text / note matches. Combine with a source filter, e.g. `--ib --highlights solitude`
 - tags / collections are surfaced in the subtitle (🏷️) and come from:
 	- **Apple Books** user Collections (e.g. "Want to Read", "Finished", and any custom collections you've created)

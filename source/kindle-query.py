@@ -80,6 +80,9 @@ _TAG_FILTER_RE = re.compile(r'--tag[:=\s]+(?:\(([^)]+)\)|(\S+))')
 # Matches the --highlights operator anywhere in the query. The tail (anything
 # after the token) is taken as a free-text search against highlight passages
 # and notes. An empty tail triggers a prompt + summary response.
+_HASH_TAG_TYPING_RE = re.compile(r'(?:^| )#[^ ]*$')
+_HASH_TAG_COMPLETE_RE = re.compile(r'#(?:\(([^)]+)\)|(\S+))\s')
+
 _HIGHLIGHTS_RE = re.compile(r'(?:^|\s)--highlights?\b(.*)$', re.IGNORECASE)
 
 # Matches just the --highlights operator token (no tail capture). Used to
@@ -303,6 +306,69 @@ def build_tag_suggestions_response(books, search_string):
 		})
 
 	return {"items": items}
+
+
+def build_hash_tag_suggestions(books, search_string):
+	"""
+	Build Alfred JSON listing tags when the user types `#` (or `#partial`).
+	Actioning a tag appends `#tagname ` to the query so filtering continues.
+	"""
+	m = _HASH_TAG_TYPING_RE.search(search_string)
+	if not m:
+		return None
+	partial = m.group(0).lstrip()
+	base_query = search_string[:m.start()] + search_string[m.start():m.start() + len(m.group(0)) - len(m.group(0).lstrip())]
+	base_query = search_string[:m.start()].rstrip() + (' ' if search_string[:m.start()].rstrip() else '')
+
+	scoped = _apply_non_tag_filters(books, search_string)
+	tag_counts = {}
+	tag_by_source = {}
+	for book in scoped:
+		for tag in book.tag_list:
+			tag_counts[tag] = tag_counts.get(tag, 0) + 1
+			if tag not in tag_by_source:
+				tag_by_source[tag] = {}
+			tag_by_source[tag][book.source] = tag_by_source[tag].get(book.source, 0) + 1
+
+	frag = partial[1:].lower()
+	matching = {t: c for t, c in tag_counts.items() if not frag or frag in t.lower()}
+
+	items = []
+	if not matching:
+		items.append({
+			"title": f"No tags matching '{partial}'",
+			"subtitle": "Keep typing or delete the # to go back to book search",
+			"valid": False,
+			"icon": {"path": "icons/Warning.png"},
+		})
+		return {"items": items}
+
+	for tag_name, count in sorted(
+		matching.items(), key=lambda kv: (-kv[1], kv[0].lower())
+	):
+		tag_token = f"({tag_name})" if " " in tag_name else tag_name
+		lib_line = _tag_libraries_subtitle(tag_by_source.get(tag_name, {}))
+		items.append({
+			"title": f"🏷️ {tag_name} ({count:,})",
+			"subtitle": f"(📚 {lib_line})" if lib_line else "(📚 unknown)",
+			"autocomplete": f"{base_query}#{tag_token} ",
+			"valid": False,
+			"icon": {"path": "icon.png"},
+		})
+
+	return {"items": items}
+
+
+def _expand_hash_tags(search_string):
+	"""
+	Convert completed `#tag ` tokens into `--tag tag` so the existing
+	filter pipeline handles them. Returns the rewritten query string.
+	"""
+	def _repl(m):
+		name = m.group(1) or m.group(2) or ""
+		token = f"({name})" if " " in name else name
+		return f"--tag {token} "
+	return _HASH_TAG_COMPLETE_RE.sub(_repl, search_string)
 
 
 def _join_fragment_parts(*parts):
@@ -1167,11 +1233,23 @@ def main():
 		log(f"\nscript duration: {round(main_timeElapsed, 3)} seconds")
 		return
 
+	# #tag typing: show matching tags for the user to pick from.
+	if _HASH_TAG_TYPING_RE.search(MYINPUT):
+		result = build_hash_tag_suggestions(myBooks, MYINPUT)
+		if result:
+			print(json.dumps(result))
+			main_timeElapsed = time() - main_start_time
+			log(f"\nscript duration: {round(main_timeElapsed, 3)} seconds")
+			return
+
+	# Expand completed #tag tokens into --tag before any pipeline stage.
+	query = _expand_hash_tags(MYINPUT)
+
 	# --highlights <query>: switch modes to a flat, cross-library highlight
 	# search. Handled before --tag because they're orthogonal intents and
 	# sharing a query box would be confusing.
-	if _HIGHLIGHTS_RE.search(MYINPUT):
-		result = build_highlights_response(all_highlights, myBooks, MYINPUT)
+	if _HIGHLIGHTS_RE.search(query):
+		result = build_highlights_response(all_highlights, myBooks, query)
 		print(json.dumps(result))
 		main_timeElapsed = time() - main_start_time
 		log(f"\nscript duration: {round(main_timeElapsed, 3)} seconds")
@@ -1179,15 +1257,15 @@ def main():
 
 	# If the user typed `--tag` without a tag name yet, short-circuit and
 	# suggest available tag names instead of falling through to "No results".
-	if _BARE_TAG_RE.search(MYINPUT):
-		result = build_tag_suggestions_response(myBooks, MYINPUT)
+	if _BARE_TAG_RE.search(query):
+		result = build_tag_suggestions_response(myBooks, query)
 		print(json.dumps(result))
 		main_timeElapsed = time() - main_start_time
 		log(f"\nscript duration: {round(main_timeElapsed, 3)} seconds")
 		return
 
 	# Search the books
-	myBooks = search_books(myBooks, MYINPUT)
+	myBooks = search_books(myBooks, query)
 
 	result = {"items": []}
 	result = serveBooks(myBooks, result)
