@@ -5,3 +5,4 @@ prefs.plist
 lib
 venv/
 venv.nosync/
+.claude/
