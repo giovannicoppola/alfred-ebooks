@@ -4,3 +4,7 @@ __pycache__
 prefs.plist
 lib
 troubleshooting/
+venv/
+venv.nosync/
+.claude/
+roadmap/
