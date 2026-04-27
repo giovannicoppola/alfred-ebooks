@@ -6,3 +6,4 @@ lib
 venv/
 venv.nosync/
 .claude/
+roadmap/
