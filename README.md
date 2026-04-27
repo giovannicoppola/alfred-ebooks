@@ -5,9 +5,9 @@
 
 
 
-<a href="https://github.com/giovannicoppola/alfred-kindle/releases/latest/">
+<a href="https://github.com/giovannicoppola/alfred-ebooks/releases/latest/">
 <img alt="Downloads"
-src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total?color=purple&label=Downloads"><br/>
+src="https://img.shields.io/github/downloads/giovannicoppola/alfred-ebooks/total?color=purple&label=Downloads"><br/>
 </a>
 
 ![](images/kindle.png)
