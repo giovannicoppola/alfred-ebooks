@@ -115,6 +115,17 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 	- `shift+enter` ↩️ opens the book at the matched chapter/location (Calibre)
 - data is automatically cached for best performance. You can force a database refresh using the keyword `::books-refresh`
 
+## Library-wide full-text search
+
+Use the `!!ksearch` keyword to search the full text of all DRM-free EPUBs across your libraries (Apple Books, Calibre, Yomu). Type your query and press ↩ to confirm — a background worker scans every book while a live progress bar tracks matches and books searched. You can close Alfred and come back later; a macOS notification fires when the scan finishes.
+
+- **Single-book search**: `⌘↩` on any book row (or `⌃↩` on a highlight row) searches inside that specific book.
+- **Proximity search**: two-word queries automatically find passages where both words appear near each other (default: within 100 words).
+- **Result caching**: searches are cached on disk (default: 11 days). Repeat searches return instantly from the `!!ksearch` overview.
+- **Drill-down**: library-wide results show a book overview sorted by match count; press ↩ on a book to drill into its individual matches.
+- **Match modifiers**: `⌘↩` copies the match context, `⇧↩` opens the book (at the chapter location for Calibre).
+- Only **DRM-free EPUBs** are searchable. Kindle books (AZW3/KFX), FairPlay-protected Apple Books purchases, and PDF/MOBI are not supported.
+
 
 
 <h1 id="known-issues">Limitations & known issues ⚠️</h1>
