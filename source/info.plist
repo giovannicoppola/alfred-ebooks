@@ -173,8 +173,6 @@
 				<false/>
 			</dict>
 		</array>
-		<key>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</key>
-		<array/>
 		<key>BA9E997F-E08E-4947-BBB4-8BF84341ED1D</key>
 		<array>
 			<dict>
@@ -217,6 +215,16 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
+				<string>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</string>
+				<key>modifiers</key>
+				<integer>524288</integer>
+				<key>modifiersubtext</key>
+				<string>list highlights</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
 				<string>04664B4B-E922-48E7-9DC8-492207C157B8</string>
 				<key>modifiers</key>
 				<integer>0</integer>
@@ -235,19 +243,7 @@
 				<key>vitoclose</key>
 				<false/>
 			</dict>
-			<dict>
-				<key>destinationuid</key>
-				<string>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</string>
-				<key>modifiers</key>
-				<integer>524288</integer>
-				<key>modifiersubtext</key>
-				<string>list highlights</string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
 		</array>
-		<key>F34BF854-B8DB-443D-9246-FBE0F078BCE9</key>
-		<array/>
 	</dict>
 	<key>createdby</key>
 	<string>giovanni</string>
@@ -259,6 +255,25 @@
 	<string>eBooks</string>
 	<key>objects</key>
 	<array>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>main_query</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
 		<dict>
 			<key>config</key>
 			<dict>
@@ -277,6 +292,93 @@
 			<string>88E41168-BDA4-4605-8F4C-A0A507AE11D1</string>
 			<key>version</key>
 			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>{var:mainkeyword}</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>⏳...fetching Kindle info...</string>
+				<key>script</key>
+				<string>export PYTHONPATH="$PWD/lib"
+/usr/bin/python3 kindle-query.py "$1"
+</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string>alfred-kindle 📚</string>
+				<key>type</key>
+				<integer>5</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>inboundconfig</key>
+			<dict>
+				<key>externalid</key>
+				<string>main_query</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>EFFEB21A-8303-4FE0-8B9D-0302BE4E21EA</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>action</key>
+				<integer>0</integer>
+				<key>argument</key>
+				<integer>0</integer>
+				<key>focusedappvariable</key>
+				<false/>
+				<key>focusedappvariablename</key>
+				<string></string>
+				<key>hotkey</key>
+				<integer>40</integer>
+				<key>hotmod</key>
+				<integer>524288</integer>
+				<key>hotstring</key>
+				<string>K</string>
+				<key>leftcursor</key>
+				<false/>
+				<key>modsmode</key>
+				<integer>0</integer>
+				<key>relatedAppsMode</key>
+				<integer>0</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.hotkey</string>
+			<key>uid</key>
+			<string>BA9E997F-E08E-4947-BBB4-8BF84341ED1D</string>
+			<key>version</key>
+			<integer>2</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -307,7 +409,7 @@
 						<key>matchstring</key>
 						<string>open_match</string>
 						<key>outputlabel</key>
-						<string>Open Match</string>
+						<string>Open Book</string>
 						<key>uid</key>
 						<string>A2D06D9D-7E28-4B98-A9D2-19E2F3BBE8E1</string>
 					</dict>
@@ -315,7 +417,7 @@
 				<key>elselabel</key>
 				<string>else</string>
 				<key>hideelse</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>type</key>
 			<string>alfred.workflow.utility.conditional</string>
@@ -452,93 +554,6 @@ fi</string>
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>alfredfiltersresults</key>
-				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<true/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>1</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string>{var:mainkeyword}</string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
-				<true/>
-				<key>queuedelaymode</key>
-				<integer>0</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string>⏳...fetching Kindle info...</string>
-				<key>script</key>
-				<string>export PYTHONPATH="$PWD/lib"
-/usr/bin/python3 kindle-query.py "$1"
-</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string></string>
-				<key>title</key>
-				<string>alfred-kindle 📚</string>
-				<key>type</key>
-				<integer>5</integer>
-				<key>withspace</key>
-				<true/>
-			</dict>
-			<key>inboundconfig</key>
-			<dict>
-				<key>externalid</key>
-				<string>main_query</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
-			<key>uid</key>
-			<string>EFFEB21A-8303-4FE0-8B9D-0302BE4E21EA</string>
-			<key>version</key>
-			<integer>3</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>action</key>
-				<integer>0</integer>
-				<key>argument</key>
-				<integer>0</integer>
-				<key>focusedappvariable</key>
-				<false/>
-				<key>focusedappvariablename</key>
-				<string></string>
-				<key>hotkey</key>
-				<integer>40</integer>
-				<key>hotmod</key>
-				<integer>524288</integer>
-				<key>hotstring</key>
-				<string>K</string>
-				<key>leftcursor</key>
-				<false/>
-				<key>modsmode</key>
-				<integer>0</integer>
-				<key>relatedAppsMode</key>
-				<integer>0</integer>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.trigger.hotkey</string>
-			<key>uid</key>
-			<string>BA9E997F-E08E-4947-BBB4-8BF84341ED1D</string>
-			<key>version</key>
-			<integer>2</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>argument</key>
 				<string>{var:markdown}</string>
 				<key>passthroughargument</key>
@@ -552,56 +567,6 @@ fi</string>
 			<string>C9F9AE76-99B2-4432-91CD-AF8D39A92E25</string>
 			<key>version</key>
 			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>alfredfiltersresults</key>
-				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<true/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>2</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string>1111</string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
-				<true/>
-				<key>queuedelaymode</key>
-				<integer>0</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string></string>
-				<key>script</key>
-				<string>export PYTHONPATH="$PWD/lib"
-/usr/bin/python3 searchEPUB.py "text view" --alfred</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string></string>
-				<key>title</key>
-				<string>troubleshooting seaarch</string>
-				<key>type</key>
-				<integer>11</integer>
-				<key>withspace</key>
-				<false/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
-			<key>uid</key>
-			<string>F34BF854-B8DB-443D-9246-FBE0F078BCE9</string>
-			<key>version</key>
-			<integer>3</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -779,26 +744,6 @@ fi</string>
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>argument</key>
-				<string></string>
-				<key>passthroughargument</key>
-				<false/>
-				<key>variables</key>
-				<dict>
-					<key>curr_book</key>
-					<string>{query}</string>
-				</dict>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.argument</string>
-			<key>uid</key>
-			<string>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>externaltriggerid</key>
 				<string>mainSearch</string>
 				<key>passinputasargument</key>
@@ -814,49 +759,6 @@ fi</string>
 			<string>5330E514-8491-49F5-98D8-DED98E264BC1</string>
 			<key>version</key>
 			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>externaltriggerid</key>
-				<string>main_query</string>
-				<key>passinputasargument</key>
-				<true/>
-				<key>passvariables</key>
-				<true/>
-				<key>workflowbundleid</key>
-				<string>self</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.callexternaltrigger</string>
-			<key>uid</key>
-			<string>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>concurrently</key>
-				<false/>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>script</key>
-				<string>export PYTHONPATH="$PWD/lib"
-/usr/bin/python3 deleteSearchCache.py "$1" --alfred</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>type</key>
-				<integer>11</integer>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.action.script</string>
-			<key>uid</key>
-			<string>411D762D-9800-4DD4-B932-290515091AE4</string>
-			<key>version</key>
-			<integer>2</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -885,86 +787,43 @@ fi</string>
 				<key>concurrently</key>
 				<false/>
 				<key>escaping</key>
-				<integer>68</integer>
+				<integer>102</integer>
 				<key>script</key>
-				<string>on run argv
-
-tell application "System Events"
-	tell process "Books"
-		-- Give Books a moment to settle its window state
-		delay 0.5
-
-		repeat with w in windows
-			try
-				set wName to name of w as text
-				set roleDesc to role description of w
-
-				-- Only close the main library window
-				if wName is "All" or roleDesc is "main window" then
-					if (exists button 1 of w) then
-						click button 1 of w
-						do shell script "echo Closed library window (" &amp; quoted form of wName &amp; ") 1&gt;&amp;2"
-					end if
-				else
-					do shell script "echo Skipped window: " &amp; quoted form of wName &amp; " [" &amp; roleDesc &amp; "] 1&gt;&amp;2"
-				end if
-
-			on error errMsg
-				do shell script "echo Error: " &amp; quoted form of errMsg &amp; " 1&gt;&amp;2"
-			end try
-		end repeat
-	end tell
-end tell
-
-
-end run</string>
+				<string>export PYTHONPATH="$PWD/lib"
+/usr/bin/python3 deleteSearchCache.py "$1" --alfred</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
 				<string></string>
 				<key>type</key>
-				<integer>6</integer>
+				<integer>11</integer>
 			</dict>
 			<key>type</key>
 			<string>alfred.workflow.action.script</string>
 			<key>uid</key>
-			<string>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</string>
+			<string>411D762D-9800-4DD4-B932-290515091AE4</string>
 			<key>version</key>
 			<integer>2</integer>
 		</dict>
 	</array>
 	<key>readme</key>
-	<string># alfred-eBooks 📚
-List, open, and search your eBooks ebooks with Alfred
+	<string># eBooks 📚
+List, open, and search your eBooks with Alfred
 
 
 ## Motivation ✅
 
-- Quickly list, search, and open your Kindle, Apple Books, Yomu, and Calibre ebooks
+- Quickly list, search, and open your Kindle/Apple Books/Yomu/Calibre libraries
 
+## What's new in version 0.3
 
-## Setting up ⚙️
-
-- Alfred 5 with Powerpack license
-- Python3
-
-
-
-
-### Default settings 
-- In Alfred, open the 'Configure Workflow' menu in `eBooks` preferences
-	- set the keyword for the workflow (default: `!k`)
-	- set the keyword to force an update (default: `::books-refresh`)
-	- set the book content icon, i.e. if a book has been downloaded locally (default: 📘)
-	- set the 'ghost' book icon, i.e. if a book has not been downloaded or previously loaned (default: 👻)
-	- show 'ghost' books (i.e. books not downloaded, or previously loaned)?  (default: yes)
-	- set target libraries (Kindle, Apple Books, Yomu, and/or Calibre)
-	- set `Calibre library path` if your library is not at `~/Calibre Library`
-	- set `Calibre metadata DB path` to override auto-detection (optional)
-	- set search scope (default: 'Title')
-		- `Title`: search titles only
-		- `Author`: search authors only
-		- `Both`: search across titles and authors
+- **Added support for Yomu, Calibre**
+- **Book- and Library-wide text search** — for searchable EPUBs 
+- **Library-wide search result caching** — full-text search results are persisted on disk and reused for the configurable cache duration (default: 11 days).
+- **Tags / Collections** — Apple Books user Collections, Calibre tags, and Yomu tags are surfaced in the subtitle (`🏷️`) and are searchable via new `--tag &lt;name&gt;` or `--tagged` operators.
+- **Cross-library highlights &amp; notes** — every highlight (and user note) from Apple Books, Calibre, Yomu, and Kindle is surfaced in search results (subtitle chip `💬 N`). `--highlights` searches books with highlights across your whole library.
+- **Highlight QuickLook typeset cards**
+- **Improved cover-image extraction** for EPUBs (parses OPF manifests, handles zip and directory bundles, tries multiple cover naming conventions).
 
 
 ## Basic Usage 📖
@@ -975,6 +834,7 @@ List, open, and search your eBooks ebooks with Alfred
 	- `--l` will filter for loaned books
 	- `--d` will filter for downloaded books
 	- `--k` will filter for Kindle books
+	- `--y` will filter for Yomu books
 	- `--ib` will filter for Apple Books books
 	- `--c` will filter for Calibre books
 	- `--read` will filter for read books
@@ -985,38 +845,6 @@ List, open, and search your eBooks ebooks with Alfred
 	- `shift+enter` ↩️ opens the book at the matched chapter/location (Calibre)
 - data is automatically cached for best performance. You can force a database refresh using the keyword `::books-refresh`
 
-## What's new in version 0.3
-
-- **Graceful handling of missing resources** — if a library source (Kindle, Apple Books, Yomu, Calibre) isn't installed, the workflow logs a clear message and skips it instead of crashing.
-- **Ctrl modifier shows searchability** — holding ctrl on any book row shows whether full-text search is available, with a specific reason when it isn't.
-- **Multi-book search drill-down** — folder-wide EPUB searches show a book overview sorted by match count; pressing Enter on a book drills into its individual matches instantly from cache.
-- **Search result caching** — full-text search results are cached on disk for a configurable duration (default: 11 days, adjustable in Workflow Configuration). Repeat searches return instantly.
-- **Overlapping search results merged** — nearby matches in the same chapter are merged into a single row with all occurrences highlighted.
-- **Longer search excerpts** — subtitle context doubled from 80 to 160 characters.
-- **Improved highlight QuickLook cards** — Georgia font preferred over New York for better readability and correct em-dash rendering. Existing cards are re-rendered automatically.
-- **Cleaner highlight modifiers** — ⌘↩ on any highlight row copies the passage to the clipboard; the old ⌥ fallback that pasted text into the Alfred query box is gone.
-- **Streamlined book-row modifiers** — the CMD modifier no longer shows the internal icon path.
-- **Thousand separators in match counts** — search results now display "1,234 matches" instead of "1234 matches".
-
-## Limitations &amp; known issues ⚠️
-
-- **Opening a specific book in the new Kindle for Mac app (Lassen) is hacky and fragile.** Lassen exposes no way to deep-link to a book from outside: no supported URL scheme opens a book, there's no AppleScript dictionary, and Catalyst hides the view hierarchy from the Accessibility API so covers can't be targeted by AX role/label. ↩️ works around this by **driving the UI as if a human were doing it** — moving the mouse, clicking, typing — which is inherently brittle and will likely break on Kindle UI updates, layout changes, or anything that perturbs timing. The sequence: Kindle is foregrounded, the AX tree is walked to detect library vs reader view, the script slides the cursor into the auto-hiding top toolbar and clicks the back-arrow if needed, the search text field is clicked at its AX-reported center to focus it (Cmd+F is unreliable across library sub-states), the existing query is cleared, the book title is typed, Return filters the library, and a Quartz-posted double-click on the first grid cell opens it. This requires granting **Accessibility permission to Alfred** in *System Settings → Privacy &amp; Security → Accessibility*. The back-arrow click position and the book-cell double-click position are layout-dependent heuristics; tweak them in `kindle-lassen-open.sh` if they miss on your setup.
-- I could not figure out how the Kindle app can tell if a book was first loaned, then purchased. Currently, if that is the case (i.e. a book was first loaned, then purchased), the book will appear as loaned.
-- Full-text book search only works on **DRM-free EPUBs** (also called "unencrypted" or "open" EPUBs). Amazon Kindle books are proprietary AZW3/KFX and always DRM-protected; Apple Books purchased from the iBooks Store are typically wrapped in FairPlay DRM. Those can still be listed, opened, and have their highlights surfaced — but `ebooklib` cannot parse the encrypted container, so search-inside-book and the EPUB report generator skip them. In practice the searchable pool is: Calibre library EPUBs, Yomu EPUBs, and any EPUBs you sideloaded into Apple Books or Calibre yourself. MOBI / AZW3 / PDF are unsupported regardless of DRM status.
-- For Calibre match opens, EPUBs are reflowable, so jumping is chapter/locator based rather than fixed "page number" precise.
-- not tested thoroughly for user-uploaded documents.
-
-
-
-## Acknowledgments 😀
-
-- Thanks to the [Alfred forum](https://www.alfredforum.com) community!
-- Icon from [SF symbols](https://developer.apple.com/sf-symbols/)
-
-## Changelog 🧰
-
-- 10-06-2024: version 0.2
-- 02-28-2023: version 0.1
 
 
 ## Feedback 🧐
@@ -1026,89 +854,89 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 	<dict>
 		<key>04664B4B-E922-48E7-9DC8-492207C157B8</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>3</integer>
 			<key>xpos</key>
-			<real>690</real>
+			<real>675</real>
 			<key>ypos</key>
-			<real>60</real>
+			<real>160</real>
 		</dict>
 		<key>24764E8D-FF48-42E7-9B54-E9D177080FA5</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>11</integer>
+			<key>note</key>
+			<string>book and library search</string>
 			<key>xpos</key>
-			<real>680</real>
+			<real>670</real>
 			<key>ypos</key>
-			<real>350</real>
+			<real>440</real>
 		</dict>
 		<key>27394D31-A067-4505-96AC-05D84162CDA0</key>
 		<dict>
 			<key>xpos</key>
-			<real>1380</real>
+			<real>1410</real>
 			<key>ypos</key>
 			<real>670</real>
 		</dict>
 		<key>28939AD5-7FDB-44B4-87C5-BFCA352716C7</key>
 		<dict>
 			<key>xpos</key>
-			<real>1435</real>
+			<real>1400</real>
 			<key>ypos</key>
-			<real>75</real>
+			<real>180</real>
 		</dict>
 		<key>411D762D-9800-4DD4-B932-290515091AE4</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>7</integer>
+			<key>note</key>
+			<string>delete cached search</string>
 			<key>xpos</key>
-			<real>1010</real>
+			<real>950</real>
 			<key>ypos</key>
-			<real>645</real>
+			<real>675</real>
 		</dict>
 		<key>487CE6DD-5966-4E3E-9D67-EF1D60023887</key>
 		<dict>
 			<key>xpos</key>
-			<real>545</real>
+			<real>525</real>
 			<key>ypos</key>
-			<real>280</real>
+			<real>435</real>
 		</dict>
 		<key>5330E514-8491-49F5-98D8-DED98E264BC1</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>11</integer>
 			<key>xpos</key>
-			<real>1390</real>
+			<real>1410</real>
 			<key>ypos</key>
-			<real>480</real>
+			<real>545</real>
 		</dict>
 		<key>53C7F24C-AFB4-42C9-8DA6-E65B7D5D1866</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>3</integer>
+			<key>note</key>
+			<string>list highlights</string>
 			<key>xpos</key>
 			<real>515</real>
 			<key>ypos</key>
-			<real>635</real>
-		</dict>
-		<key>5603FD39-F2B3-4FF3-A373-E25879D5BD7F</key>
-		<dict>
-			<key>note</key>
-			<string>script to close the 'All' window after opening the book, but it works inconsistently</string>
-			<key>xpos</key>
-			<real>1665</real>
-			<key>ypos</key>
-			<real>705</real>
+			<real>15</real>
 		</dict>
 		<key>61FE5DD2-9A3A-41E9-BA16-BCC00A3DD6C9</key>
 		<dict>
 			<key>xpos</key>
-			<real>990</real>
+			<real>1070</real>
 			<key>ypos</key>
-			<real>320</real>
-		</dict>
-		<key>7ECE7CAD-1161-4D39-A35A-DF2BD59EED1D</key>
-		<dict>
-			<key>xpos</key>
-			<real>1175</real>
-			<key>ypos</key>
-			<real>420</real>
+			<real>440</real>
 		</dict>
 		<key>88E41168-BDA4-4605-8F4C-A0A507AE11D1</key>
 		<dict>
 			<key>xpos</key>
-			<real>1215</real>
+			<real>1400</real>
 			<key>ypos</key>
-			<real>15</real>
+			<real>60</real>
 		</dict>
 		<key>BA9E997F-E08E-4947-BBB4-8BF84341ED1D</key>
 		<dict>
@@ -1119,38 +947,37 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		</dict>
 		<key>C201E860-5900-49B2-8980-4B8E5DA0A4C8</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>4</integer>
+			<key>note</key>
+			<string>open book</string>
 			<key>xpos</key>
-			<real>920</real>
+			<real>880</real>
 			<key>ypos</key>
-			<real>100</real>
+			<real>230</real>
 		</dict>
 		<key>C4CF391F-F6A5-48BE-B5D0-B018D1393DA7</key>
 		<dict>
 			<key>xpos</key>
-			<real>280</real>
+			<real>115</real>
 			<key>ypos</key>
-			<real>350</real>
+			<real>505</real>
 		</dict>
 		<key>C9F9AE76-99B2-4432-91CD-AF8D39A92E25</key>
 		<dict>
 			<key>xpos</key>
-			<real>1185</real>
+			<real>1215</real>
 			<key>ypos</key>
-			<real>230</real>
+			<real>280</real>
 		</dict>
 		<key>EFFEB21A-8303-4FE0-8B9D-0302BE4E21EA</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>3</integer>
 			<key>xpos</key>
-			<real>280</real>
+			<real>240</real>
 			<key>ypos</key>
 			<real>135</real>
-		</dict>
-		<key>F34BF854-B8DB-443D-9246-FBE0F078BCE9</key>
-		<dict>
-			<key>xpos</key>
-			<real>1485</real>
-			<key>ypos</key>
-			<real>255</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>
@@ -1241,7 +1068,7 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>Title</string>
+				<string>All</string>
 				<key>pairs</key>
 				<array>
 					<array>
@@ -1253,7 +1080,7 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 						<string>Author</string>
 					</array>
 					<array>
-						<string>Both</string>
+						<string>Title + Author</string>
 						<string>Both</string>
 					</array>
 					<array>
@@ -1479,7 +1306,7 @@ Feedback welcome! If you notice a bug, or have ideas for new features, please fe
 		</dict>
 	</array>
 	<key>version</key>
-	<string>0.2</string>
+	<string>0.3</string>
 	<key>webaddress</key>
 	<string>https://github.com/giovannicoppola/alfred-ebooks</string>
 </dict>

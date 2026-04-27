@@ -263,10 +263,20 @@ def build_tag_suggestions_response(books, search_string):
 	items = []
 
 	if not tag_counts:
+		# Kindle's macOS app doesn't expose user collections locally, so
+		# scoping to Kindle-only books always yields zero tags. Say that
+		# explicitly instead of the generic "no tags" message.
+		kindle_only = bool(scoped) and all(b.source == "Kindle" for b in scoped)
 		items.append({
-			"title": "No tags found in your library",
+			"title": (
+				"No tags available in Kindle libraries"
+				if kindle_only
+				else "No tags found in your library"
+			),
 			"subtitle": (
-				"Tags come from Apple Books Collections, Calibre tags, "
+				"Kindle doesn't expose collections locally — try Apple Books, Calibre, or Yomu."
+				if kindle_only
+				else "Tags come from Apple Books Collections, Calibre tags, "
 				"and Yomu tags. Add some in those apps, then refresh."
 			),
 			"valid": False,
@@ -335,9 +345,21 @@ def build_hash_tag_suggestions(books, search_string):
 
 	items = []
 	if not matching:
+		# Kindle macOS doesn't expose user collections locally, so a
+		# Kindle-only scope will never have tags. Tell the user that
+		# rather than the generic "no match for #" message.
+		kindle_only = bool(scoped) and all(b.source == "Kindle" for b in scoped)
 		items.append({
-			"title": f"No tags matching '{partial}'",
-			"subtitle": "Keep typing or delete the # to go back to book search",
+			"title": (
+				"No tags available in Kindle libraries"
+				if kindle_only
+				else f"No tags matching '{partial}'"
+			),
+			"subtitle": (
+				"Kindle doesn't expose collections locally — try Apple Books, Calibre, or Yomu."
+				if kindle_only
+				else "Keep typing or delete the # to go back to book search"
+			),
 			"valid": False,
 			"icon": {"path": "icons/Warning.png"},
 		})
@@ -558,6 +580,10 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 			subtitle_bits.append(f"📝 {snippet}")
 		if h.created:
 			subtitle_bits.append(h.created)
+		# Kindle has no local passage text, so ↩ opens the cloud notebook
+		# (read.amazon.com) where the highlighted text actually lives.
+		if h.source == "Kindle":
+			subtitle_bits.append("↩ open highlight on read.amazon.com")
 
 		# ↩ on a highlight row now flags `action = show_highlight` in the
 		# Alfred variable stream so downstream graph nodes (e.g. a Large
@@ -591,14 +617,25 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 		# default "no preview" state on Space.
 		quicklook_path = ensure_highlight_image(h, target_book)
 
+		# Kindle highlights don't have local passage text — the only place
+		# the text exists is Amazon's cloud notebook. So for Kindle we
+		# route ↩ to open that URL via the dispatcher instead of rendering
+		# the placeholder string in the downstream markdown view.
+		if h.source == "Kindle" and h.arg:
+			row_arg = h.arg
+			row_action = "open_book"
+		else:
+			row_arg = show_body
+			row_action = "show_highlight"
+
 		item = {
 			"title": title_line,
 			"subtitle": " – ".join(subtitle_bits),
 			"valid": True,
 			"icon": {"path": icon_path},
-			"arg": show_body,
+			"arg": row_arg,
 			"variables": {
-				"action": "show_highlight",
+				"action": row_action,
 				# Exposed so the downstream markdown / text-view node
 				# can render the location (epubcfi, Kindle position,
 				# Yomu anchor, etc.) + timestamp as a footer. We
@@ -658,9 +695,14 @@ def build_book_highlights_response(all_highlights, books, source, book_id, tail)
 			}
 
 		# ⇧↩  — open the book (same deep-link as the header row's ↩).
-		open_arg = h.arg
-		if not open_arg and target_book is not None:
-			open_arg = _book_open_arg(target_book)
+		# For Kindle we deliberately skip `h.arg` (the cloud-notebook URL,
+		# already wired to ↩) and open the book itself in the Kindle app.
+		if h.source == "Kindle":
+			open_arg = _book_open_arg(target_book) if target_book is not None else ""
+		else:
+			open_arg = h.arg
+			if not open_arg and target_book is not None:
+				open_arg = _book_open_arg(target_book)
 		if open_arg:
 			item["mods"]["shift"] = {
 				"valid": True,

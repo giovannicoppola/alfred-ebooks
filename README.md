@@ -1,7 +1,7 @@
 # alfred-eBooks📚
 
 
-### List, search, and open your Kindle, Apple Books, Yomu, and Calibre ebooks with [Alfred 5](https://www.alfredapp.com/) 
+### List, search, and open your eBooks with [Alfred 5](https://www.alfredapp.com/) 
 
 
 
@@ -30,40 +30,21 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-kindle/total
 
 <h1 id="whats-new">What's new ✨</h1>
 
-### Version 0.3
+### Version 0.3 (full details in [whatsnew.md](whatsnew.md)):
 
-- **Typing guard for library-wide search** — `!!ksearch` no longer fires an expensive full-library scan on every keystroke. Instead it shows a mirror row reflecting your query, with cached searches listed below. Press ↵ to confirm, and a live progress bar tracks the scan. Cached searches are directly actionable — press ↵ to reopen their results instantly.
-- **Live progress bar via fresh-session reopen** — when a search is confirmed, the workflow spawns a background worker and reopens Alfred as a fresh session so the progress bar updates in real time (workaround for Alfred's `rerun` limitation with text in the search box).
-- **Improved progress grammar** — progress text now correctly says "1 match in 1 book" instead of "1 matches in 0 books".
-- **Graceful handling of missing resources** — if a user enables a library source (Kindle, Apple Books, Yomu, Calibre) that isn't installed, the workflow logs a clear message and skips it instead of crashing.
-- **`⌃` modifier shows searchability** — holding ctrl on any book row now shows whether full-text search is available for that book, with a specific reason when it isn't (e.g. "Kindle books aren't searchable locally", "the .epub file isn't on disk").
-- **Multi-book search drill-down** — folder-wide EPUB searches now show a book overview sorted by match count; pressing ↩ on a book drills into its individual matches instantly (served from cache, no re-scanning).
-- **Search result caching** — full-text search results are persisted on disk and reused for the configurable cache duration (default: 11 days). Repeat searches return instantly. Cache duration is adjustable in Workflow Configuration → "Search cache duration (days)".
-- **Overlapping search results merged** — nearby matches in the same chapter are merged into a single result row with all occurrences highlighted, instead of showing near-duplicate rows.
-- **Longer search excerpts** — subtitle context for search matches doubled from 80 to 160 characters.
-- **Singular/plural "word apart"** — proximity search now correctly says "1 word apart" instead of "1 words apart".
-- **Improved highlight QuickLook cards** — the font cascade now prefers Georgia over New York for better readability and correct em-dash rendering on all Macs. Existing cards are automatically re-rendered.
-- **Cleaner highlight modifiers** — `⌘↩` on any highlight row copies the passage to the clipboard; the old `⌥` fallback that pasted text into the Alfred query box is gone.
-- **Streamlined book-row modifiers** — the CMD modifier no longer shows the internal icon path.
-- **Thousand separators in match counts** — search results now display "1,234 matches" instead of "1234 matches" for easier scanning.
-- **Improved cover image extraction** — downloaded and EPUB-extracted covers are now validated against JPEG/PNG magic bytes; corrupted or DRM-encrypted images are discarded and the workflow falls back to Apple Books' own `BCCoverCache` (HEIC → JPEG via `sips`), recovering covers that were previously missing.
-- **`#` tag shorthand** — type `#` to instantly list all available tags; keep typing to filter (e.g. `#bio`). Press ↩ to select a tag and continue your search. Multiple tags can be stacked (`#sci-fi #favorite`) and combined with other operators (`#sci-fi --highlights stoic`). The existing `--tag` syntax still works.
-
-### Version 0.2
-
-Highlights of the v0.2 dev-branch work (full details in [whatsnew.md](whatsnew.md)):
-
-- **Open a specific book in the new Kindle for Mac app (Lassen)** — previously the workflow could only foreground the app; now ↩️ on a Kindle book opens that exact book via UI automation. *Hacky and fragile* (driven by mouse moves, clicks, and keystrokes — see the [Limitations](#known-issues) section), but it works today.
-- **Full-text EPUB search engine** with a 1,340-line standalone search engine, proximity search for two-word queries, an Alfred-native progressive UI, and Markdown / annotated-EPUB report generation.
-- **Cross-library highlights & notes** — every highlight (and user note) from Apple Books, Calibre, Yomu, and Kindle is surfaced in search results (subtitle chip `💬 N`). `⌥↩` on a book drills into its highlights; `--highlights` searches highlights across your whole library; `⇧` / `Y` QuickLooks a typeset card of the highlight; `⌃↩` on a highlight runs full-text search in that book.
-- **Tags / Collections** — Apple Books user Collections, Calibre tags, and Yomu tags are surfaced in the subtitle (`🏷️`) and are searchable via new `--tag <name>` / `--tagged` operators and two new `SEARCH_SCOPE` values (`Tags`, `All`).
+- **Added support for Yomu, Calibre**
+- **Book- and Library-wide text search** — for searchable EPUBs 
+- **Library-wide search result caching** — full-text search results are persisted on disk and reused for the configurable cache duration (default: 11 days).
+- **Tags / Collections** — Apple Books user Collections, Calibre tags, and Yomu tags are surfaced in the subtitle (`🏷️`) and are searchable via new `--tag <name>` or `--tagged` operators.
+- **Cross-library highlights & notes** — every highlight (and user note) from Apple Books, Calibre, Yomu, and Kindle is surfaced in search results (subtitle chip `💬 N`). `--highlights` searches books with highlights across your whole library.
+- **Highlight QuickLook typeset cards**
 - **Improved cover-image extraction** for EPUBs (parses OPF manifests, handles zip and directory bundles, tries multiple cover naming conventions).
 
 
 
 <h1 id="motivation">Motivation ✅</h1>
 
-- Quickly list, search, and open your Kindle, Apple Books, Yomu, and Calibre ebooks
+-Quickly list, search, and open your Kindle/Apple Books/Yomu/Calibre libraries
 
 
 <h1 id="setting-up">Setting up ⚙️</h1>
@@ -105,10 +86,11 @@ Highlights of the v0.2 dev-branch work (full details in [whatsnew.md](whatsnew.m
 	- `--k` will filter for Kindle books
 	- `--ib` will filter for Apple Books books
 	- `--c` will filter for Calibre books
+	- `--y` will filter for Yomu books
 	- `--read` will filter for read books
 	- `--tagged` will filter for books that have at least one tag
 	- `#` lists all available tags; keep typing to filter (e.g. `#bio`). Press ↩ to select a tag and continue searching. Multiple tags can be combined (e.g. `#sci-fi #favorite`), and tags stack with other filters (e.g. `#sci-fi --highlights stoic`). Multi-word tags are parenthesized automatically: `#(Want to Read)`.
-	- `--tag <name>` is the long-form equivalent of `#<name>` — narrows to books whose tags match `<name>` (substring, case-insensitive). Can be combined, e.g. `--tag sci-fi --tag favorite`. For multi-word tags, wrap the name in parentheses: `--tag (home improvement)`.
+	- `--tag <name>` is the long-form equivalent of `#<name>` — narrows to books whose tags match `<name>` (substring, case-insensitive). Can be combined, e.g. `--tag sci-fi --tag favorite`. 
 	- `--highlights` switches into cross-library highlight search. Bare `--highlights` shows a summary (per-source counts + top books by highlight count). `--highlights <words>` returns a flat list of highlights whose text / note matches. Combine with a source filter, e.g. `--ib --highlights solitude`
 - tags / collections are surfaced in the subtitle (🏷️) and come from:
 	- **Apple Books** user Collections (e.g. "Want to Read", "Finished", and any custom collections you've created)
@@ -152,7 +134,7 @@ Highlights of the v0.2 dev-branch work (full details in [whatsnew.md](whatsnew.m
 
 <h1 id="changelog">Changelog 🧰</h1>
 
-- 04-23-2026: version 0.3: typing guard, live progress bar, search caching, drill-down, graceful error handling
+- 04-23-2026: version 0.3: book search, library search, highlights, additional readers supported
 - 10-07-2024: version 0.2: from kindle to eBooks
 - 02-28-2023: version 0.1
 
