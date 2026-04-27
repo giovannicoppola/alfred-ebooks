@@ -2,97 +2,102 @@
 
 ## Overview
 
-The `dev` branch introduces a major expansion of the alfred-kindle workflow, transforming it from a book library browser into a full-featured **eBook research tool** with full-text search capabilities across EPUB libraries.
+The `dev` branch transforms the alfred-kindle workflow from a Kindle-only book library browser into a full-featured **eBook research tool** supporting Kindle, Apple Books, Yomu, and Calibre, with full-text EPUB search, cross-library highlights, and tag-based filtering.
 
 ---
 
 ## New Features
 
-### Tags / Collections surfaced in search results
+### Yomu and Calibre support
 
-Tags are now extracted from every source that has them and stored alongside each book in a new `Book.tags` field:
+Books, highlights, and tags from Yomu and Calibre are now surfaced alongside Kindle and Apple Books. Each source can be individually toggled in Workflow Configuration (`USE_YOMU`, `USE_CALIBRE`).
 
-- **Apple Books** user Collections (e.g. "Want to Read", "Finished", plus any custom collections). Pulled from `ZBKCOLLECTION` + `ZBKCOLLECTIONMEMBER` in the BKLibrary sqlite, filtering out the auto-managed library-type shelves (`All`, `Books`, `PDFs`, `Audiobooks`, `My Books`, `Downloaded`, `Samples`) so only user-curated shelves show up.
-- **Calibre** tags — the standard `tags` column from `metadata.db`, joined via `books_tags_link`.
-- **Yomu** tags — previously shown in the description slot, now stored in their own field.
+### Tags / Collections
+
+Tags are extracted from every source that supports them and stored in a `Book.tags` field:
+
+- **Apple Books** user Collections (e.g. "Want to Read", "Finished", custom collections). Auto-managed shelves (All, Books, PDFs, etc.) are filtered out.
+- **Calibre** tags from `metadata.db`.
+- **Yomu** tags from the CoreData link table.
 
 UI / filter additions:
 
-- Tags render in each Alfred item's subtitle as `🏷️ tag, tag, tag` (truncated to keep subtitles readable).
-- New `--tag <name>` search operator narrows by tag name (substring, case-insensitive). Stackable, e.g. `--tag sci-fi --tag favorite`.
-- New `--tagged` operator keeps only books that have at least one tag.
+- Tags render in each Alfred item's subtitle as `🏷️ tag, tag, tag`.
+- `#` **tag shorthand**: type `#` to instantly list all available tags; keep typing to filter (e.g. `#bio`). Press ↩ to select and continue searching. Multiple tags stack (`#sci-fi #favorite`) and combine with other operators (`#sci-fi --highlights stoic`). Multi-word tags are parenthesized automatically: `#(Want to Read)`.
+- `--tag <name>` long-form equivalent, stackable, substring case-insensitive.
+- `--tagged` keeps only books with at least one tag.
 - `SEARCH_SCOPE` gains two new values: `Tags` (search tags only) and `All` (title + author + tags).
 
-Cache pickles are versioned (`*_v2.pkl`) so the new fields are populated automatically without needing a manual `::books-refresh` after upgrading.
+### Highlights & notes
 
-### Highlights + notes surfaced in search results
+Each book carries a `highlights_count` integer. Highlights live in per-source pickles (`*_highlights_v1.pkl`), rebuilt on the same mtime trigger as books.
 
-Each book now carries a `highlights_count` integer and the workflow ships a new `Highlight` dataclass that captures passage text, user note, location, color, timestamps and an open-in-app deep link. Highlights live in per-source pickles (`*_highlights_v1.pkl`) and are rebuilt on the same mtime trigger as books.
+Sources:
 
-Sources and fidelity:
-
-- **Apple Books**: pulled from `~/Library/Containers/com.apple.iBooksX/Data/Documents/AEAnnotation/AEAnnotation_*.sqlite` (`ZAEANNOTATION`). Full highlight text (`ZANNOTATIONSELECTEDTEXT`), user note (`ZANNOTATIONNOTE`), CFI-ish locator (`ZANNOTATIONLOCATION`), style / color, and Core-Data timestamps. Deep-links with `ibooks://assetid/<ZASSETID>`.
-- **Calibre**: pulled from the `annotations` table in `metadata.db` (Calibre 5+). Full highlight text (`searchable_text` + `annot_data.highlighted_text`), notes, CFIs. Only populated for books opened in Calibre's Viewer — imported-but-never-viewed books have no annotations.
-- **Yomu**: `ZANNOTATION` in `Yomu_data.sqlite`. Full highlight text (`ZTEXT`), note (`ZANNOTATION`), reference. Reuses the existing `yomu-open` handler.
-- **Kindle (Lassen)**: counts + user-typed NOTE text are recoverable from `KSDK/<account>/annotation.db` and `AnnotationStorage`, but Amazon does **not** store the highlighted passage text locally for HIGHLIGHT entries. The workflow surfaces counts and notes, and the open action deep-links to `https://read.amazon.com/notebook?asin=<ASIN>` where the actual passage text lives in the cloud.
+- **Apple Books**: full highlight text, user note, CFI locator, style/color, timestamps. Deep-links via `ibooks://assetid/<id>`.
+- **Calibre**: full highlight text + notes from the `annotations` table (Calibre 5+).
+- **Yomu**: full highlight text + notes from `ZANNOTATION`.
+- **Kindle**: counts + user-typed NOTE text only — Amazon does not store highlight passage text locally. Opens `https://read.amazon.com/notebook?asin=<ASIN>`.
 
 UI / filter additions:
 
-- Subtitle chip `💬 N` renders on every Book with highlights.
-- New `--highlights` operator switches to a flat, cross-library highlights search.
-  - Bare `--highlights` shows a summary row (total count, per-source breakdown) plus the top-15 books by highlight count.
-  - `--highlights <words>` returns every highlight whose text or note matches (substring, case-insensitive).
-  - Source filters compose: `--k --highlights`, `--ib --highlights stoic`, `--c --highlights`, `--y --highlights`.
-- **Per-book drill-down via modifier key.** On any book row with highlights, `⌥↩` routes into a dedicated drill-down screen (one highlight per Alfred row, full passage text as title, location / date / note in the subtitle). Typing more text in the drill-down box substring-filters the highlights of that specific book. The routing is pure Alfred graph (not an AppleScript re-entry): the main script filter has a new modifier-keyed connection (`modifiers: 524288` → `alt`) to a `Call External Trigger` node whose target is a second script filter (`externalid: highlightsDrill`). The book's identity is carried as Alfred `variables` on the alt-mod (`drill_source`, `drill_book_id`), and Alfred's `passvariables: true` on the trigger call hands them to the drill-down script as environment variables. `kindle-query.py` detects those and switches into drill-down mode. No query-string operator, no out-of-band `osascript` call.
-- On a highlight row: `↩` opens the book at the deep-link; `⌘↩` copies just that highlight's text; `⇧` / `Y` previews the highlight as a typeset QuickLook card; `⌃↩` runs full-text search in the owning book (EPUB-backed sources only).
+- Subtitle chip `💬 N` on every book with highlights.
+- `--highlights` operator for cross-library highlight search. Bare `--highlights` shows a summary + top books by count. `--highlights <words>` returns matching highlights. Source filters compose: `--ib --highlights stoic`.
+- **`--highlights` summary books** behave like regular book rows: ↩ opens the book, ⌃↩ searches inside it, ⌥↩ drills into highlights.
+- **Per-book drill-down** via `⌥↩` on any book row — one highlight per Alfred row, full passage text as title, location/date/note in subtitle. Typing filters in place.
+- Highlight row modifiers: `↩` opens the book, `⌘↩` copies text, `⌃↩` searches the owning book (EPUB sources), `⇧↩` opens the book.
+- `⇧`/`Y` QuickLook preview renders the highlight as a typeset card (Newsreader Medium, auto-fit height, cached on disk, re-rendered when text changes).
 
-### 1. Open a specific book in the new Kindle for Mac app (Lassen)
+### Open a specific book in the new Kindle for Mac app (Lassen)
 
-Previously the workflow could list Kindle books but not open them — Lassen exposes no deep-link, AppleScript dictionary, or AX-targetable book covers. The new `kindle-lassen-open.sh` drives Kindle's UI as if a human were doing it: it walks the AX tree to detect library vs reader view, clicks the auto-hiding back-arrow toolbar to escape reader view if needed, focuses the search field via a coordinate click on its AX-reported center, types the book title, and double-clicks the first grid cell with Quartz HID events.
+Lassen exposes no deep-link, AppleScript dictionary, or AX-targetable book covers. `kindle-lassen-open.sh` drives the UI via accessibility: walks the AX tree to detect library vs reader view, clicks the back-arrow toolbar, focuses the search field, types the title, and double-clicks the first grid cell. Inherently hacky and fragile. Requires Accessibility permission for Alfred.
 
-This is **inherently hacky and fragile** — it will likely break on Kindle UI updates, layout changes, screen-resolution differences, or anything that perturbs timing — but it works today. Requires granting Accessibility permission to Alfred.
+The sequence: Kindle is foregrounded, then the AX tree is walked to detect whether we're on the library (any `AXTextField` is exposed) or in reader view (only opaque `AXGroup`s and window chrome); if we're in reader view, the script slides the cursor into the auto-hiding top toolbar and clicks the back-arrow at its left edge to return to the library; the search text field is then clicked at its AX-reported center to focus it (Cmd+F doesn't refocus once the library is in search-results sub-state, and Catalyst ignores AX SetFocused); the existing query is cleared with Cmd+A + Delete, the book title is typed, Return filters the library to that book, and a Quartz-posted double-click on the first grid cell opens it. This requires granting **Accessibility permission to Alfred** in *System Settings → Privacy & Security → Accessibility*. Caveats: the back-arrow is clicked at `(winX+30, winY+55)` and the book-cell double-click at `(30%, 22%)` of the window — both are layout-dependent heuristics; tweak them in `kindle-lassen-open.sh` if they miss on your setup. The fully-rendered library window must be reachable from the current Kindle state for the workaround to work.
 
-### 2. Full-Text EPUB Search Engine (`searchEPUB.py`)
+### Full-text EPUB search engine (`searchEPUB.py`)
 
-The biggest addition: a ~1,340-line standalone search engine that searches the **actual text content** of EPUB files, not just metadata.
+A standalone search engine that searches the actual text content of EPUB files:
 
-- Searches across an entire folder of EPUBs or a single book
+- Searches an entire folder of EPUBs or a single book
 - Case-insensitive matching with context snippets
-- Handles both standard `.epub` zip files and `.epub` directory bundles (as used by macOS Books app)
+- Handles both standard `.epub` zip files and directory bundles (macOS Books)
 - TOC-aware: identifies which chapter each match comes from
+- **Proximity search**: two-word queries automatically find passages where both words appear within a configurable distance (default: 100 words)
+- **Report generation**: Markdown reports and modified EPUB files with highlighted search terms
 
-### 3. Proximity Search
+### Library-wide search UX
 
-When a query has exactly two words (e.g., `"love death"`), the engine automatically switches to **proximity search mode**, finding passages where both words appear within a configurable distance.
+- **Typing guard** for `!!ksearch` — no longer fires an expensive scan on every keystroke. Shows a mirror row reflecting the query, with cached searches listed below. Press ↩ to confirm.
+- **Live progress bar** via background worker + AppleScript fresh-session reopen (workaround for Alfred's `rerun` limitation with text in the search box). Progress shows match count, book count, and current book being searched. "You can close Alfred and check back later" message.
+- **Search result caching** — results persisted on disk, reused for configurable cache duration (default: 11 days). Repeat searches return instantly. Cached searches are directly actionable from the `!!ksearch` overview.
+- **Cache deletion** via `⌘⌥⌃↩` on cached search rows.
+- **Multi-book drill-down** — folder-wide searches show a book overview sorted by match count; ↩ on a book drills into its individual matches (served from cache).
+- **Overlapping search results merged** — nearby matches in the same chapter are combined into a single row with all occurrences highlighted.
+- **Match row modifiers**: `⌘↩` copies to clipboard, `⇧↩` opens the book (with chapter location for Calibre), ↩ opens the markdown/context view.
+- **Back button** (`⌘⌥↩`) on all-library search result screens (summary, book rows, no-results, cached results) to return to the search interface.
 
-- Default distance: 100 words
-- Configurable via `--proximity=N`
-- Distance semantics: 25 = same paragraph, 50 = nearby, 100 = same section, 200 = same chapter
-- Results show `word1 ... word2 (N words apart)`
+### Improved cover image extraction
 
-### 4. Alfred-Native Progressive Search
+- Downloaded and EPUB-extracted covers are validated against JPEG/PNG magic bytes.
+- Corrupted or DRM-encrypted images are discarded.
+- **BCCoverCache fallback**: when Apple Books encrypts the EPUB cover, the workflow reads Apple Books' own `BCCoverCache` (unencrypted HEIC thumbnails) and converts to JPEG via `sips`.
+- OPF manifest parsing for cover discovery (handles `<meta name="cover">` metadata and manifest items with "cover" in their id/href).
 
-EPUB search is integrated into Alfred's UI with a progressive, stateful workflow:
+---
 
-- Uses Alfred's `rerun` mechanism to process one book per execution cycle
-- Real-time progress bars: `(15/47) |-----x----------|`
-- Persistent state via temp files across rerun invocations
-- **Drill-down UI**: first shows a book overview (one row per book with match counts), then lets you drill into individual matches within a specific book
-- Stable UIDs for consistent Alfred selection behavior
+## Smaller fixes and polish
 
-### 5. Report Generation
-
-Search results can be exported in two formats:
-
-- **Markdown reports**: formatted with matches grouped by book, context snippets, bold-highlighted search terms, and chapter attribution
-- **Modified EPUB files** (`--epub` flag): generates new EPUB files with yellow-highlighted search terms and an injected search results index chapter
-
-### 6. Improved Cover Image Extraction
-
-The `fetchImageCover()` function in `kindle_fun.py` was significantly expanded (from ~10 lines to ~150 lines):
-
-- **Before (main)**: only checked for `cover.jpeg` in the EPUB root directory
-- **After (dev)**: parses OPF manifests to locate cover images, handles both zip and directory EPUB formats, tries multiple cover naming conventions (`cover.jpeg`, `cover.jpg`, `cover.png`, `cover.gif`), and searches manifest metadata for cover-tagged items
+- **Graceful handling of missing resources** — if a library source isn't installed, the workflow logs a message and skips it instead of crashing.
+- **`⌃` modifier on book rows** shows whether full-text search is available, with a specific reason when it isn't.
+- **Longer search excerpts** — subtitle context for search matches doubled from 80 to 160 characters.
+- **Correct singular/plural grammar** — "1 match in 1 book", "1 word apart", etc.
+- **Thousand separators** in match counts (e.g. "1,234 matches").
+- **Bold highlight spacing** — space padding around `**` markers for Alfred markdown rendering.
+- **Book titles resolved from EPUB metadata** instead of hex filenames.
+- **Clean search box** — delete-cache and confirmation prefixes no longer leak text into Alfred's search box.
+- **Highlight QuickLook cards** prefer Georgia over New York for better em-dash rendering.
+- **`⌘↩` on highlight rows** copies the passage; the old `⌥` paste-into-query fallback is removed.
+- **Streamlined book-row CMD modifier** — no longer shows the internal icon path.
 
 ---
 
@@ -114,32 +119,20 @@ Existing dependencies (`requests`, `xmltodict`, `biplist`) remain unchanged.
 ### New Files
 | File | Purpose |
 |---|---|
-| `source/searchEPUB.py` | Full-text EPUB search engine (1,340 lines) |
-| `source/DEPENDENCY_FIX.md` | Documents lxml/Python version mismatch fix for Alfred's system Python |
-| `source/test_dependencies.py` | Validates all imports work under Alfred's Python 3.9.6 |
-| `troubleshooting/README.md` | Full documentation for searchEPUB.py |
-| `troubleshooting/CHANGELOG.md` | Version 1.0.0 release notes |
-| `troubleshooting/CACHING_USAGE.md` | Caching system docs for library statistics |
-| `troubleshooting/PROXIMITY_SEARCH_USAGE.md` | Proximity search usage guide |
-| `troubleshooting/QUICK_REFERENCE.md` | Quick reference/cheat sheet for searchEPUB.py |
-| `troubleshooting/createStats.py` | EPUB library statistics generator with JSON-based caching |
-| `troubleshooting/*.py` | Various test and utility scripts |
-
-### Removed Files
-- Several ChatGPT-generated images removed from `images/` (cleanup of unused assets)
+| `source/searchEPUB.py` | Full-text EPUB search engine |
+| `source/deleteSearchCache.py` | Delete cached EPUB search artifacts |
+| `source/highlight_images.py` | QuickLook JPG renderer for highlights |
+| `source/kindle-lassen-open.sh` | UI-automation opener for new Kindle app |
 
 ### Modified Files
-- `source/kindle_fun.py` — expanded cover image extraction (+160 lines)
-- `source/info.plist` — updated Alfred workflow configuration (+387 lines, adds searchEPUB integration)
-- `source/requirements.txt` — 3 new dependencies added
-- `.gitignore` — updated
+- `source/kindle_fun.py` — expanded cover image extraction, BCCoverCache fallback, image validation
+- `source/kindle-query.py` — tags, highlights, `#` tag shorthand, drill-down, `--highlights` search
+- `source/config.py` — new pickle paths, highlight config, Yomu/Calibre defaults
+- `source/info.plist` — updated Alfred workflow graph (searchEPUB integration, modifiers, external triggers)
+- `source/requirements.txt` — new dependencies
+- `README.md` — updated usage docs, What's New section
 
----
-
-## Planned / Future Enhancements (from CHANGELOG.md)
-
-- Fuzzy matching
-- Regular expression support
-- CSV/JSON output formats
-- Parallel processing for large libraries
-- Built-in caching for search results
+### Cache versioning
+- Book pickles: `*_v3.pkl` (v2 added tags, v3 added highlights_count)
+- Highlight pickles: `*_highlights_v1.pkl`
+- Highlight render version: `v3` (v1 initial, v2 Newsreader font + auto-height, v3 Georgia preference)
