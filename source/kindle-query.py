@@ -60,7 +60,7 @@ from kindle_fun import (
 from highlight_images import ensure_highlight_image, _normalize_body
 
 
-MYINPUT = sys.argv[1].casefold()
+MYINPUT = (sys.argv[1] if len(sys.argv) > 1 else "").casefold()
 
 # Matches a "bare" --tag token at the end of the query, i.e. the user typed
 # `--tag` (optionally with trailing whitespace) but has not started typing a

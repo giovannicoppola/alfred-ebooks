@@ -97,6 +97,7 @@ def getDownloadedASINs(basepath):
 			}
 		}]}
 		print (json.dumps(result))
+		return []
 
 
 def get_yomu(myDatabase, epub_cache_dir=None):
@@ -831,64 +832,66 @@ def get_kindle(myDatabase):
 		
 		rowid, blob_data, title, currPos, maxPos, downStatus, asinRaw, isRead = row
 		
-        # Skip if blob_data is None
+		# Skip if blob_data is None
 		if blob_data is None:
-			authorName = ''
-		else: 	# Attempt to decode the blob data to text
+			continue
+		loaned = 0
+		authorName = ''
+		# Attempt to decode the blob data to text
+		try:
+			plist_data = biplist.readPlistFromString(blob_data)
+			# Search for the string in the decoded text
 			try:
-				plist_data = biplist.readPlistFromString(blob_data)
-				# Search for the string in the decoded text
 				authorRow = plist_data['$objects'].index('author')
 				authorName = plist_data['$objects'][authorRow+1]
-				
-				if 'Purchase' in plist_data['$objects']:
-						loaned = 0
-						
-				elif 'PublicLibraryLending' in plist_data['$objects']:
-					loaned = 1
-					loanCount += 1
-					#log (f"Loaned! title: {title}, total: {loanCount}")
-				
-				if not isinstance(authorName, str):
-					
+			except (ValueError, KeyError, IndexError):
+				authorName = ''
+
+			if 'Purchase' in plist_data['$objects']:
+				loaned = 0
+			elif 'PublicLibraryLending' in plist_data['$objects']:
+				loaned = 1
+				loanCount += 1
+
+			if not isinstance(authorName, str):
+				try:
 					myAuthorIDs = authorName['NS.objects']
 					myAuthorIDs = [int(str(uid).strip('Uid()')) for uid in myAuthorIDs]
-					# Fetch elements from list B and join them
 					authorName = '; '.join([plist_data['$objects'][i] for i in myAuthorIDs])
-					
-			except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
-				log("Failed to decode BLOB data as a plist.")
-				authorName = ''
-			
-			if isRead == 1:
-				percentRead = 1.0
-			else:
-				try:
-					percentRead = currPos/maxPos
+				except (TypeError, KeyError, IndexError):
+					authorName = ''
 
-				except:
-					percentRead = 0.0
-				
-			# downloading the cover
-			ASIN = asinRaw[2:-2]
-			ICON_PATH = f"{CACHE_FOLDER_IMAGES_KINDLE}{ASIN}.01"
+		except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
+			log("Failed to decode BLOB data as a plist.")
+			authorName = ''
 
-			bookURL = f"https://www.amazon.com/dp/{ASIN}"
-			
-			if not os.path.exists(ICON_PATH):
-				log ("retrieving image" + ICON_PATH)
-				try:
-					urllib.request.urlretrieve(f"{MY_URL_STRING}{ASIN}.01", ICON_PATH)
-				except urllib.error.URLError as e:
-					ICON_PATH = "icons/kindle.png"
-					log("Error retrieving image:", e.reason)  # Log the specific error reason
+		if isRead == 1:
+			percentRead = 1.0
+		else:
+			try:
+				percentRead = currPos/maxPos
+			except:
+				percentRead = 0.0
 
-			
-			if downStatus == 3:
-				downStatus = 1
-			else:
-				downStatus = 0
-			 
+		# downloading the cover
+		ASIN = (asinRaw or "")[2:-2]
+		ICON_PATH = f"{CACHE_FOLDER_IMAGES_KINDLE}{ASIN}.01"
+
+		bookURL = f"https://www.amazon.com/dp/{ASIN}"
+
+		if not os.path.exists(ICON_PATH):
+			log ("retrieving image" + ICON_PATH)
+			try:
+				urllib.request.urlretrieve(f"{MY_URL_STRING}{ASIN}.01", ICON_PATH)
+			except urllib.error.URLError as e:
+				ICON_PATH = "icons/kindle.png"
+				log("Error retrieving image:", e.reason)  # Log the specific error reason
+
+		if downStatus == 3:
+			downStatus = 1
+		else:
+			downStatus = 0
+
 		book = Book(
 				title=title,
 				bookID=ASIN,

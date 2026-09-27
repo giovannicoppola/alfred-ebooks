@@ -3,18 +3,18 @@
 import os
 import sys
 import shutil
+import tempfile
 
 
-
-CACHE_FOLDER = os.getenv('alfred_workflow_cache')
-DATA_FOLDER = os.getenv('alfred_workflow_data')
-CACHE_FOLDER_IMAGES_KINDLE = CACHE_FOLDER+"/images/kindle/"
-CACHE_FOLDER_IMAGES_IBOOKS = CACHE_FOLDER+"/images/ibooks/"
-CACHE_FOLDER_IMAGES_CALIBRE = CACHE_FOLDER+"/images/calibre/"
-TIMESTAMP_KINDLE = CACHE_FOLDER+"/timestamp_kindle.txt"
-TIMESTAMP_IBOOKS = CACHE_FOLDER+"/timestamp_ibooks.txt"
-TIMESTAMP_YOMU = CACHE_FOLDER+"/timestamp_yomu.txt"
-TIMESTAMP_CALIBRE = CACHE_FOLDER+"/timestamp_calibre.txt"
+CACHE_FOLDER = os.getenv('alfred_workflow_cache') or os.path.join(tempfile.gettempdir(), 'alfred-ebooks-cache')
+DATA_FOLDER = os.getenv('alfred_workflow_data') or os.path.join(tempfile.gettempdir(), 'alfred-ebooks-data')
+CACHE_FOLDER_IMAGES_KINDLE = os.path.join(CACHE_FOLDER, "images", "kindle") + "/"
+CACHE_FOLDER_IMAGES_IBOOKS = os.path.join(CACHE_FOLDER, "images", "ibooks") + "/"
+CACHE_FOLDER_IMAGES_CALIBRE = os.path.join(CACHE_FOLDER, "images", "calibre") + "/"
+TIMESTAMP_KINDLE = os.path.join(CACHE_FOLDER, "timestamp_kindle.txt")
+TIMESTAMP_IBOOKS = os.path.join(CACHE_FOLDER, "timestamp_ibooks.txt")
+TIMESTAMP_YOMU = os.path.join(CACHE_FOLDER, "timestamp_yomu.txt")
+TIMESTAMP_CALIBRE = os.path.join(CACHE_FOLDER, "timestamp_calibre.txt")
 
 
 
@@ -412,10 +412,10 @@ class Highlight:
 
 
 
-BOOK_CONTENT_SYMBOL = os.path.expanduser(os.getenv('BookContent'))
-GHOST_SYMBOL = os.path.expanduser(os.getenv('GhostContent'))
-GHOST_RESULTS = os.path.expanduser(os.getenv('SHOW_GHOST'))
-SEARCH_SCOPE = os.path.expanduser(os.getenv('SEARCH_SCOPE'))
+BOOK_CONTENT_SYMBOL = os.getenv('BookContent') or ''
+GHOST_SYMBOL = os.getenv('GhostContent') or ''
+GHOST_RESULTS = os.getenv('SHOW_GHOST') or ''
+SEARCH_SCOPE = os.getenv('SEARCH_SCOPE') or ''
 
 
 def env_flag(name, default='1'):
